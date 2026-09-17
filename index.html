@@ -1760,11 +1760,22 @@ async function confirmCheckout(){
     }
     // รวม coStaffs จาก BB อื่นๆ — 14% รวม หารจำนวนคน
   const bbOtherItems=serviceCart.filter(s=>s.bbOther&&s.coStaffs);
-  const allCoStaffs=bbOtherItems.length?bbOtherItems.flatMap(s=>{
-    const n=s.coStaffs.length||1;
-    const perPersonComm=Math.round(s.price*0.14/n);
-    return s.coStaffs.map(cs=>({...cs,forService:s.name,servicePrice:s.price,comm:perPersonComm}));
-  }):[];
+  // ราคาบริการปกติในบิล (ไม่ใช่ BB Other) เพื่อรวม comm ให้พนักงาน
+  const regularTotalForComm=serviceCart.filter(s=>!s.bbOther).reduce((a,s)=>a+(s.price||0),0);
+  const allCoStaffs=bbOtherItems.length?(()=>{
+    const staffMap={};
+    bbOtherItems.forEach((s,si)=>{
+      const n=s.coStaffs.length||1;
+      const bbComm=Math.round(s.price*0.14/n);
+      // บริการปกติ: กระจาย comm ผ่านกลุ่มพนักงานชุดแรก (ไม่นับซ้ำ)
+      const regComm=si===0&&n>0?Math.round(regularTotalForComm*0.14/n):0;
+      s.coStaffs.forEach(cs=>{
+        if(!staffMap[cs.staffId]) staffMap[cs.staffId]={...cs,comm:0,forService:s.name,servicePrice:s.price};
+        staffMap[cs.staffId].comm+=bbComm+regComm;
+      });
+    });
+    return Object.values(staffMap);
+  })():[];
   // BB Other: ไม่ใส่ staffId/staffName เพื่อป้องกัน double-count ใน payroll
   const saveStaffId=hasBBOtherBill?'':staffId;
   const saveStaffName=hasBBOtherBill?'':staff?.name||'';
@@ -2218,7 +2229,7 @@ function showDayDetail(dk){
             <span style="font-size:0.65rem;padding:1px 6px;border-radius:8px;background:${!s.payMethod||s.payMethod==='cash'?'#E8F5E9':'#FFF3E0'};color:${!s.payMethod||s.payMethod==='cash'?'#2E7D32':'#E65100'}">${!s.payMethod||s.payMethod==='cash'?'💵 สด':'📱 โอน'}</span>
             ${v?`<span style="font-size:0.65rem;background:#FFEBEE;color:#C62828;padding:1px 7px;border-radius:8px;text-decoration:none;">❌ VOID</span>`:''}
           </div>
-          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">${s.memberName||'ลูกค้าทั่วไป'} · ${new Date(s.date).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}${s.commission>0&&!v?' · คอม '+s.commission.toLocaleString()+'฿':''}${s.homecareTotal>0?` · 🛍️ ${s.homecareTotal.toLocaleString()}฿`:''}${v?' · โดย '+( s.voidBy||''):''}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">${v?'':(s.memberName||'ลูกค้าทั่วไป')+' · '}${new Date(s.date).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}${s.commission>0&&!v?' · คอม '+s.commission.toLocaleString()+'฿':''}${s.homecareTotal>0&&!v?` · 🛍️ ${s.homecareTotal.toLocaleString()}฿`:''}${v?' · ยกเลิกโดย '+(s.voidBy||''):''}</div>
         </div>
         <div style="font-weight:700;font-size:0.95rem;color:${v?'#bbb':'var(--gold-dark)'};white-space:nowrap;">${(s.totalPaid||s.paid).toLocaleString()} ฿</div>
         ${isOwner()&&!v?`<button onclick="voidSale('${s.id}')" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:4px 9px;font-size:0.7rem;cursor:pointer;font-family:'Sarabun',sans-serif;white-space:nowrap;">❌ Void</button>`:''}
@@ -2633,6 +2644,10 @@ async function voidSale(saleId){
 
     // 5. Mark void ในบิล
     await window.fbVoidSale(saleId, voidBy);
+
+    // อัพเดต salesLog local ทันที ไม่รอ onSnapshot
+    const _vi = salesLog.findIndex(s=>s.id===saleId);
+    if(_vi>=0) salesLog[_vi] = {...salesLog[_vi], voided:true, voidBy, voidAt:new Date().toISOString()};
 
     showToast('✅ Void บิลแล้วค่ะ — คืนเครดิตและสต็อคกลับหมดแล้ว');
     closeModalDirect();
