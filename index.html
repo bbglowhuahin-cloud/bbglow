@@ -10,7 +10,8 @@
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8HM1grB7OsiBvdLo5xRH5SqLnQoLR25U",
@@ -24,6 +25,11 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+// ใช้เมื่อเปิด USE_FIREBASE_AUTH แล้วเท่านั้น (ดูหัวข้อ LOGIN ด้านล่าง)
+window.fbSignIn = (email, password)=> signInWithEmailAndPassword(auth, email, password);
+window.fbSignOut = ()=> signOut(auth).catch(()=>{});
 
 // ===== FIREBASE HELPERS =====
 async function fbSaveMember(m){ await setDoc(doc(db,'members',m.id),m); }
@@ -31,27 +37,8 @@ async function fbDeleteMember(id){ await deleteDoc(doc(db,'members',id)); }
 async function fbSaveTx(t){ await setDoc(doc(db,'transactions',t.id),t); }
 async function fbSaveSale(s){ await setDoc(doc(db,'sales',s.id),s); }
 async function fbDeleteSale(id){ await deleteDoc(doc(db,'sales',id)); }
-async function fbSaveCoupon(c){ await setDoc(doc(db,'coupons',c.id),c); }
-async function fbUpdateCoupon(c){ await setDoc(doc(db,'coupons',c.id),c,{merge:true}); }
-async function fbGetCoupons(memberId){
-  const snap=await getDocs(query(collection(db,'coupons'),where('memberId','==',memberId)));
-  return snap.docs.map(d=>d.data());
-}
-async function fbGetAllActiveCoupons(){
-  const snap=await getDocs(collection(db,'coupons'));
-  return snap.docs.map(d=>d.data()).filter(c=>c.remaining>0);
-}
 async function fbVoidSale(id, voidBy){ await setDoc(doc(db,'sales',id), {voided:true, voidBy, voidAt:new Date().toISOString()}, {merge:true}); }
 async function fbUpdateTx(t){ await setDoc(doc(db,'transactions',t.id),t); }
-async function fbSaveStock(data){ await setDoc(doc(db,'config','stock'),data); }
-async function fbGetStock(){ const d=await getDoc(doc(db,'config','stock')); return d.exists()?d.data():{}; }
-function listenStock(cb){
-  onSnapshot(doc(db,'config','stock'), snap=>{
-    stockData = snap.exists() ? snap.data() : {};
-    STOCK_ITEMS.forEach(item=>{ if(stockData[item.id]==null) stockData[item.id]=0; });
-    cb();
-  });
-}
 
 // Real-time listeners
 function listenMembers(cb){
@@ -81,12 +68,6 @@ window.fbSaveSale = fbSaveSale;
 window.fbDeleteSale = fbDeleteSale;
 window.fbVoidSale = fbVoidSale;
 window.fbUpdateTx = fbUpdateTx;
-window.fbSaveCoupon = fbSaveCoupon;
-window.fbUpdateCoupon = fbUpdateCoupon;
-window.fbGetCoupons = fbGetCoupons;
-window.fbSaveStock = fbSaveStock;
-window.fbGetStock = fbGetStock;
-window.listenStock = listenStock;
 window.listenMembers = listenMembers;
 window.listenTransactions = listenTransactions;
 window.listenSales = listenSales;
@@ -384,17 +365,6 @@ input::placeholder{color:#C0A898;}
 .dash-search-input{flex:1;border:none;outline:none;font-size:0.88rem;background:transparent;color:var(--brown);font-family:'Sarabun',sans-serif;}
 .dash-search-input::placeholder{color:var(--text-muted);}
 
-.stock-item{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--white);border-radius:12px;margin-bottom:7px;box-shadow:var(--shadow);border:1.5px solid rgba(201,169,110,0.15);}
-.stock-item.low{border-left:4px solid var(--danger);background:#FFF8F8;}
-.stock-icon{font-size:1.3rem;min-width:30px;text-align:center;}
-.stock-info{flex:1;}
-.stock-name{font-weight:700;font-size:0.86rem;color:var(--brown);}
-.stock-brand{font-size:0.68rem;color:var(--text-muted);margin-top:1px;}
-.stock-qty{text-align:right;}
-.stock-num{font-size:1.1rem;font-weight:700;color:var(--gold-dark);}
-.stock-unit{font-size:0.65rem;color:var(--text-muted);}
-.stock-section-label{font-size:0.78rem;font-weight:700;color:var(--crimson);letter-spacing:0.5px;margin:10px 0 6px;display:flex;align-items:center;gap:6px;}
-.stock-section-label::after{content:'';flex:1;height:1px;background:linear-gradient(to right,var(--gold-light),transparent);}
 
 /* ===== PREMIUM UI UPGRADES ===== */
 
@@ -491,9 +461,6 @@ input:focus,select:focus{border-color:var(--gold);background:var(--white);box-sh
 .login-user-btn.selected{box-shadow:0 4px 14px rgba(160,120,40,0.25);}
 .login-user-avatar{box-shadow:0 3px 10px rgba(0,0,0,0.2);}
 
-/* Stock items */
-.stock-item{border-radius:14px;transition:box-shadow 0.15s;}
-.stock-item:hover{box-shadow:0 4px 16px rgba(90,50,30,0.12);}
 
 /* Dash hero refinement */
 .dash-hero{box-shadow:0 10px 40px rgba(139,26,42,0.45),0 2px 8px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.18);}
@@ -520,6 +487,7 @@ input:focus,select:focus{border-color:var(--gold);background:var(--white);box-sh
     <div class="login-logo">BB <span>GLOW</span></div>
     <div class="login-sub">ครบวงจร หัวหิน · ระบบสมาชิก</div>
     <div class="login-welcome">กรุณาเลือกชื่อและกรอก Password ค่ะ</div>
+    <div id="login-version" style="font-size:0.66rem;color:var(--text-muted);text-align:center;margin:-4px 0 8px;"></div>
     <div class="login-user-grid" id="login-user-grid" style="grid-template-columns:1fr 1fr 1fr;">
       <div class="login-user-btn" onclick="selectLoginUser('golf')" id="ubtn-golf">
         <div class="login-user-avatar" style="background:linear-gradient(135deg,#8B6914,#C9A96E)">กอ</div>
@@ -772,6 +740,10 @@ input:focus,select:focus{border-color:var(--gold);background:var(--white);box-sh
       <div class="service-chip" onclick="selectSpa(this,'Underarm Spa',399)"><div class="sc-name">Underarm Spa</div><div class="sc-price">399฿</div><div class="sc-tag">10%</div></div>
       <div class="service-chip" onclick="selectSpa(this,'Secret Spa',499)"><div class="sc-name">Secret Spa</div><div class="sc-price">499฿</div><div class="sc-tag">10%</div></div>
     </div>
+    <div id="spa-doer-section" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(201,169,110,0.08);border:1.5px solid rgba(201,169,110,0.35);border-radius:10px;">
+      <div style="font-size:0.75rem;color:var(--brown);font-weight:700;margin-bottom:6px;">💆 ใครเป็นคนทำสปาคะ <span style="font-weight:400;color:var(--text-muted);">(ได้ค่าคอม 10% ของงานสปา)</span></div>
+      <div id="spa-doer-btns" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
     <div id="member-eligible-warning" style="display:none;margin-top:9px;" class="alert alert-gold"><span>🌟</span><span id="member-elig-warn-text"></span></div>
 
 
@@ -819,29 +791,23 @@ input:focus,select:focus{border-color:var(--gold);background:var(--white);box-sh
   </div>
 
   <div id="co-credit-section" style="display:none;" class="card">
-    <div class="card-title">💰 ใช้เครดิต</div>
+    <div class="card-title">💰 แคชแบ็คสะสมของลูกค้า</div>
+    <div style="font-size:0.72rem;color:var(--text-muted);margin:-4px 0 8px;">ลูกค้าจะใช้ลดค่าบริการครั้งนี้ หรือเก็บสะสมไว้ใช้ครั้งหน้าก็ได้ค่ะ</div>
     <div class="credit-display">
-      <div><div style="font-size:0.68rem;color:var(--text-muted)">เครดิตที่มี</div><div style="font-size:1.05rem;font-weight:700;color:var(--gold-dark)" id="co-available-credit">0 ฿</div></div>
-      <div style="text-align:right"><div style="font-size:0.68rem;color:var(--text-muted)">ใช้ได้สูงสุด 50%</div><div style="font-size:1.05rem;font-weight:700;color:var(--rose)" id="co-max-credit">0 ฿</div></div>
+      <div><div style="font-size:0.68rem;color:var(--text-muted)">สะสมไว้ทั้งหมด</div><div style="font-size:1.05rem;font-weight:700;color:var(--gold-dark)" id="co-available-credit">0 ฿</div></div>
+      <div style="text-align:right"><div style="font-size:0.68rem;color:var(--text-muted)">ใช้ครั้งนี้ได้สูงสุด 50% ของค่าบริการ</div><div style="font-size:1.05rem;font-weight:700;color:var(--rose)" id="co-max-credit">0 ฿</div></div>
     </div>
-    <label>ใช้เครดิต: <span id="co-use-credit-label" style="color:var(--gold-dark);font-weight:700">0 ฿</span></label>
+    <label>ใช้ครั้งนี้: <span id="co-use-credit-label" style="color:var(--gold-dark);font-weight:700">0 ฿</span></label>
     <input type="range" class="credit-slider" id="co-credit-slider" min="0" max="0" value="0" step="1" oninput="updateCreditUse(this.value)">
+    <div id="co-credit-left" style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;"></div>
   </div>
   <div class="card">
     <div class="card-title">🧾 สรุปยอด</div>
     <div class="price-row"><span>ราคาบริการ</span><span id="co-price">0 ฿</span></div>
-    <div class="price-row" id="co-credit-row" style="color:var(--danger);display:none"><span>หักเครดิต</span><span id="co-credit-used">-0 ฿</span></div>
+    <div class="price-row" id="co-credit-row" style="color:var(--danger);display:none"><span>หักแคชแบ็ค</span><span id="co-credit-used">-0 ฿</span></div>
     <div class="price-row" id="co-homecare-row" style="display:none;color:var(--gold-dark)"><span>🛍️ สินค้า Home Care</span><span id="co-homecare-total">0 ฿</span></div>
-    <!-- ส่วนลดพิเศษ -->
-    <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
-      <span style="font-size:0.82rem;color:var(--crimson);font-weight:600;white-space:nowrap;">🏷️ ส่วนลด</span>
-      <input type="number" id="co-discount" min="0" placeholder="0" oninput="updateCheckout()"
-        style="width:90px;padding:5px 8px;border:1.5px solid rgba(201,169,110,0.4);border-radius:8px;font-size:0.85rem;font-family:'Sarabun',sans-serif;color:var(--crimson);text-align:right;">
-      <span style="font-size:0.82rem;color:var(--text-muted);">฿</span>
-      <span id="co-discount-preview" style="font-size:0.75rem;color:var(--crimson);display:none;"></span>
-    </div>
     <div class="price-row total"><span>💵 ยอดชำระรวม</span><span id="co-total">0 ฿</span></div>
-    <div class="price-row credit-earn" id="co-earn-row" style="display:none"><span>+ เครดิตที่จะได้รับ</span><span id="co-earn">0 ฿</span></div>
+    <div class="price-row credit-earn" id="co-earn-row" style="display:none"><span>+ แคชแบ็คที่จะได้คืน</span><span id="co-earn">0 ฿</span></div>
     <div class="price-row comm-row" id="co-comm-row" style="display:none"><span id="co-comm-label">💜 ค่าคอม</span><span id="co-comm-amt">0 ฿</span></div>
 
     <!-- วิธีชำระเงิน -->
@@ -864,7 +830,7 @@ input:focus,select:focus{border-color:var(--gold);background:var(--white);box-sh
         <label>📆 วันที่บริการ <span style="font-size:0.7rem;color:var(--text-muted)">(ลงย้อนหลังได้ค่ะ)</span></label>
         <input type="date" id="co-date" style="width:100%;padding:9px 12px;border:1.5px solid rgba(201,169,110,0.3);border-radius:10px;font-size:0.88rem;font-family:'Sarabun',sans-serif;color:var(--brown);background:var(--white);">
       </div>
-      <button class="btn btn-gold" onclick="confirmCheckout()">✅ ยืนยันชำระเงิน</button>
+      <button class="btn btn-gold" id="btn-confirm-checkout" onclick="confirmCheckout()">✅ ยืนยันชำระเงิน</button>
       <button class="btn btn-outline" onclick="showReceiptPreview()" style="font-size:0.8rem">🖨️ ดูใบเสร็จก่อนชำระ</button>
     </div>
   </div>
@@ -877,6 +843,7 @@ input:focus,select:focus{border-color:var(--gold);background:var(--white);box-sh
     <button class="period-btn active" id="mf-all" onclick="setMemberFilter('all',this)" style="flex:1">👥 ทั้งหมด</button>
     <button class="period-btn" id="mf-member" onclick="setMemberFilter('member',this)" style="flex:1">💜 เมมเบอร์</button>
     <button class="period-btn" id="mf-guest" onclick="setMemberFilter('guest',this)" style="flex:1">👤 ทั่วไป</button>
+    <button class="btn btn-gold btn-sm" onclick="openAddCustomer()" style="width:auto;padding:6px 12px;font-size:0.75rem;white-space:nowrap;">➕ เพิ่มลูกค้า</button>
 
   </div>
   <div id="assign-code-banner" style="display:none;background:#FFF3E0;border:1.5px solid #FFB300;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
@@ -979,13 +946,28 @@ input:focus,select:focus{border-color:var(--gold);background:var(--white);box-sh
 <script>
 
 // ===== STAFF =====
+// ค่าคอมคิดตาม "ประเภทงาน" เท่ากันทุกคน: BB/ทั่วไป 14% · แว็กซ์ 20% · สปา 10%
+const COMM_RATE_DEFAULT = 0.14;   // งาน BB และบริการทั่วไป
+
+// STAFF = "ผู้ทำงาน" ที่เลือกได้ในบิล — อาจารย์กอล์ฟเป็นผู้บริหาร ไม่อยู่ในรายชื่อนี้แล้ว
 const STAFF=[
-  {id:'S1',name:'อาจารย์กอล์ฟ',role:'เจ้าของ',  salary:35000,bonus:0,   commRate:0.20,bg:'linear-gradient(135deg,#8B6914,#C9A96E)'},
-  {id:'S2',name:'คุณเอ',        role:'พนักงาน', salary:11000,bonus:0,commRate:0.14,bg:'linear-gradient(135deg,#3A6B47,#6B9E78)'},
-  {id:'S3',name:'หญิง',         role:'พนักงาน', salary:11000,bonus:0,commRate:0.14,bg:'linear-gradient(135deg,#A05040,#D4846A)'},
+  {id:'S2',name:'คุณเอ',role:'พนักงาน', salary:11000,bonus:0,commRate:COMM_RATE_DEFAULT,bg:'linear-gradient(135deg,#3A6B47,#6B9E78)'},
+  {id:'S3',name:'หญิง', role:'พนักงาน', salary:11000,bonus:0,commRate:COMM_RATE_DEFAULT,bg:'linear-gradient(135deg,#A05040,#D4846A)'},
 ];
+// เก็บไว้อ่านบิลเก่าที่เคยบันทึกชื่ออาจารย์เป็นผู้ทำ (ไม่แสดงในรายการให้เลือกแล้ว)
+const RETIRED_STAFF=[
+  {id:'S1',name:'อาจารย์กอล์ฟ',role:'ผู้บริหาร',salary:0,bonus:0,commRate:COMM_RATE_DEFAULT,bg:'linear-gradient(135deg,#8B6914,#C9A96E)',retired:true},
+];
+const ALL_STAFF=[...STAFF,...RETIRED_STAFF];
+
+// สมาชิก: เป็นแล้วเป็นตลอด ไม่มีวันหมดอายุ (ไม่ต้องต่ออายุ)
+// เครดิต: แต่ละก้อนมีอายุ 1 ปี นับจากวันที่ได้รับก้อนนั้น ๆ แยกกันคนละก้อน
+// เลขรุ่นของระบบ — ดูที่มุมขวาบนของทุกเครื่องว่าตรงกันไหม (ถ้าไม่ตรง = เครื่องนั้นยังใช้ตัวเก่า ให้รีเฟรช)
+const APP_VERSION='2.1 · 17 ก.ย. 69';
 
 const CREDIT_RATE=0.10, MAX_CREDIT_PCT=0.50, CREDIT_EXPIRE_DAYS=365;
+const BB_OTHER_COMM_RATE=0.14;   // ค่าคอม BB อื่นๆ
+const VOUCHER_VALID_DAYS=30;     // อายุคูปองแว๊กซ์ฟรีจากโปร Super Lock (วัน)   // ค่าคอม 'BB อื่นๆ' หารกันตามจำนวนคนที่ติ๊ก
 const MEMBER_SERVICES=['BB Double Serum','BB Glow Super Lock','Meso สูตรอาจารย์','Super Lock + BB คอ'];
 
 let members=[], transactions=[], salesLog=[];
@@ -1003,7 +985,9 @@ function fmtThDate(d){return new Date(d).toLocaleDateString('th-TH',{weekday:'sh
 function daysLeft(d){return Math.ceil((new Date(d)-new Date())/864e5);}
 function getValidCredit(mId){const now=new Date();return transactions.filter(t=>t.memberId===mId&&new Date(t.expiry)>now).reduce((s,t)=>s+t.balance,0);}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
-function staffById(id){return STAFF.find(s=>s.id===id);}
+function staffById(id){return ALL_STAFF.find(s=>s.id===id);}
+let _uidSeq=0;
+function uid(prefix){ _uidSeq=(_uidSeq+1)%1000; return prefix+Date.now()+String(_uidSeq).padStart(3,'0'); }
 
 // ===== UNSAVED CHANGES GUARD =====
 let checkoutDirty = false;
@@ -1026,11 +1010,7 @@ function showTab(name){
   if(name==='home')    renderHome();
   if(name==='checkout')initCheckout();
   if(name==='members') renderMemberList();
-  if(name==='report'){
-    renderReport();
-    clearTimeout(window._reportTimer);
-    window._reportTimer=setTimeout(()=>{if(document.getElementById('page-report')?.classList.contains('active'))renderReport();},1500);
-  }
+  if(name==='report')  renderReport();
   if(name==='payroll') renderPayroll();
   if(name==='ranking') renderRanking();
 }
@@ -1236,12 +1216,12 @@ let bbOtherStaffIds=[]; // พนักงานที่ติ๊กไว้
 
 function renderBBOtherStaffChecks(){
   const el=document.getElementById('bb-other-staff-checks'); if(!el) return;
-  const staffList=STAFF.filter(s=>s.id!=='S4'); // ยกเว้น S4 ADMIN
+  const staffList=STAFF;
   el.innerHTML=staffList.map(s=>{
     const checked=bbOtherStaffIds.includes(s.id);
     return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${checked?'rgba(201,169,110,0.2)':'white'};border:1.5px solid ${checked?'var(--gold)':'rgba(201,169,110,0.3)'};border-radius:8px;cursor:pointer;font-size:0.8rem;color:var(--brown);font-weight:${checked?'700':'400'}">
       <input type="checkbox" ${checked?'checked':''} onchange="toggleBBOtherStaff('${s.id}')" style="accent-color:var(--gold);width:14px;height:14px;">
-      ${s.name} <span style="color:var(--text-muted);font-size:0.72rem;">(${Math.round(Math.round(s.commRate*100))}%)</span>
+      ${s.name} <span style="color:var(--text-muted);font-size:0.72rem;">(หาร ${Math.round(BB_OTHER_COMM_RATE*100)}%)</span>
     </label>`;
   }).join('');
 }
@@ -1286,7 +1266,7 @@ function addBBOtherItem(){
   // เก็บรายการ + staffIds ที่ทำ
   const staffSnap=bbOtherStaffIds.map(id=>{
     const s=STAFF.find(x=>x.id===id);
-    return {staffId:id, staffName:s?.name||id, commRate:s?.commRate||0};
+    return {staffId:id, staffName:s?.name||id, commRate:BB_OTHER_COMM_RATE};
   });
   serviceCart.push({name, price, bbOther:true, bbOtherId:'BO'+Date.now(), coStaffs:staffSnap});
   nameEl.value=''; priceEl.value='';
@@ -1346,12 +1326,44 @@ function applyWaxCustomPrice(){
   const idx=serviceCart.findIndex(s=>s.waxCustom);
   if(idx>=0){ serviceCart[idx].price=val; renderServiceCart(); updateCheckout(); }
 }
+// ===== สปา — ระบุผู้ทำได้ =====
+const SPA_COMM_RATE=0.10;
+let spaDoerId=null;   // พนักงานที่ทำงานสปาในบิลนี้
+
+function renderSpaDoer(){
+  const sec=document.getElementById('spa-doer-section');
+  const box=document.getElementById('spa-doer-btns');
+  if(!sec||!box) return;
+  const hasSpa=serviceCart.some(s=>s.spa);
+  sec.style.display = hasSpa ? '' : 'none';
+  if(!hasSpa){ return; }
+  box.innerHTML = STAFF.map(st=>{
+    const on = spaDoerId===st.id;
+    return `<button type="button" onclick="setSpaDoer('${st.id}')"
+      style="flex:1;min-width:110px;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:'Sarabun',sans-serif;font-size:0.82rem;
+      border:1.5px solid ${on?'var(--gold-dark)':'rgba(201,169,110,0.4)'};background:${on?'linear-gradient(135deg,#FFF6E8,#FFEFD3)':'white'};
+      color:var(--brown);font-weight:${on?'700':'400'};">${on?'✓ ':''}${st.name}</button>`;
+  }).join('');
+}
+
+function setSpaDoer(id){
+  spaDoerId = (spaDoerId===id) ? null : id;
+  const st=staffById(spaDoerId);
+  serviceCart.forEach(s=>{ if(s.spa){ s.doerId=spaDoerId||null; s.doerName=st?st.name:null; } });
+  renderSpaDoer(); renderServiceCart(); updateCheckout();
+}
+
 function selectSpa(el,name,price){
   setCheckoutDirty(true);
   const idx=serviceCart.findIndex(s=>s.name===name&&s.spa);
   if(idx>=0){ serviceCart.splice(idx,1); el.classList.remove('selected'); }
-  else { serviceCart.push({name,price,spa:true,commRate:0.10}); el.classList.add('selected'); }
-  coUseCredit=0; renderServiceCart(); updateCheckout();
+  else {
+    const st=staffById(spaDoerId);
+    serviceCart.push({name,price,spa:true,commRate:SPA_COMM_RATE,doerId:spaDoerId||null,doerName:st?st.name:null});
+    el.classList.add('selected');
+  }
+  if(!serviceCart.some(s=>s.spa)) spaDoerId=null;
+  coUseCredit=0; renderSpaDoer(); renderServiceCart(); updateCheckout();
 }
 
 function selectService(el,name,price,custom=false){
@@ -1417,11 +1429,6 @@ function hcAdj(id, delta){
   updateCheckout();
 }
 
-function getDiscount(){
-  const val=parseInt(document.getElementById('co-discount')?.value)||0;
-  return Math.max(0,val);
-}
-
 function getHomecareTotal(){
   return HOMECARE_ITEMS.reduce((sum,item)=>sum+(item.price*(homecareCart[item.id]||0)),0);
 }
@@ -1439,7 +1446,7 @@ function renderServiceCart(){
   const total=getServiceTotal();
   el.innerHTML='<div style="font-size:0.72rem;color:var(--brown);font-weight:700;margin-bottom:4px;">\ud83d\uded2 \u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01</div>'+
     serviceCart.map((s,i)=>'<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:2px 0;">'+
-      '<span style="color:var(--text)">\u2022 '+s.name+'</span>'+
+      '<span style="color:var(--text)">\u2022 '+s.name+(s.doerName?' <span style=\'font-size:0.68rem;color:var(--purple)\'>('+s.doerName+')</span>':'')+'</span>'+
       '<span style="color:var(--gold-dark);font-weight:700;">'+(s.price>0?s.price.toLocaleString()+' \u0e3f':'\u0e01\u0e33\u0e2b\u0e19\u0e14\u0e40\u0e2d\u0e07')+
       ' <button onclick="removeService('+i+')" style="margin-left:6px;background:none;border:none;color:#C62828;cursor:pointer;font-size:0.85rem;padding:0;line-height:1;">\u2715</button></span></div>').join('')+
     '<div style="border-top:1px solid rgba(212,168,75,0.3);margin-top:5px;padding-top:5px;display:flex;justify-content:space-between;font-weight:700;font-size:0.82rem;">'+
@@ -1527,12 +1534,12 @@ async function addWaxVoucherIfPromo(memberId){
   if(!m) return;
   if(!m.vouchers) m.vouchers=[];
   const now=new Date();
-  const expYear=now.getFullYear();
+  const exp=new Date(now); exp.setDate(exp.getDate()+VOUCHER_VALID_DAYS);
   m.vouchers.push({
-    id:'V'+Date.now(),
+    id:uid('V'),
     name:'แว๊กซ์&สปารักแร้ฟรี',
-    note:'จากโปร Super Lock กันยายน '+expYear,
-    expiry:`${expYear}-09-30`,
+    note:`จากโปร Super Lock (ใช้ได้ ${VOUCHER_VALID_DAYS} วัน)`,
+    expiry:exp.toISOString().slice(0,10),
     usedAt:null,
     createdAt:now.toISOString()
   });
@@ -1554,11 +1561,13 @@ async function markVoucherUsed(memberId, voucherId){
 
 function removeService(idx){
   const s=serviceCart[idx];
+  if(s&&s.spa&&serviceCart.filter(x=>x.spa).length<=1) spaDoerId=null;
   document.querySelectorAll('.service-chip').forEach(c=>{
     if(c.querySelector('.sc-name')?.textContent===s.name) c.classList.remove('selected');
   });
   serviceCart.splice(idx,1);
   coUseCredit=0;
+  renderSpaDoer();
   renderServiceCart();
   updateCheckout();
 }
@@ -1580,243 +1589,299 @@ function updateHorecareTotal(){
   }
 }
 
-function updateCheckout(){
-  const hasBBOtherNow=serviceCart.some(s=>s.bbOther);
-  const staffSel=document.getElementById('co-staff');
-  const bbOtherStaffSec=document.getElementById('bb-other-staff-section');
+// ===== สูตรคำนวณบิลกลาง =====
+// กติกาที่ตกลงกันไว้:
+//  1) ยอดที่เก็บลูกค้า = (ค่าบริการ − แคชแบ็คที่ใช้) + โฮมแคร์
+//  2) แคชแบ็ค (เครดิต) = ส่วนลดตัวเดียวของระบบ — ลดได้เฉพาะ "ค่าบริการ" สูงสุด 50% ไม่ลดโฮมแคร์
+//     ลูกค้าจะใช้ครั้งนี้ หรือเก็บสะสมไว้ใช้ครั้งหลังก็ได้ (แต่ละก้อนอายุ 1 ปี)
+//  3) แคชแบ็คที่ได้คืน = (ค่าบริการ + โฮมแคร์) × 10% เฉพาะลูกค้าที่เป็นเมมเบอร์
+//  4) ค่าคอมพนักงาน = คิดจาก "ค่าบริการ" เท่านั้น ไม่คิดจากโฮมแคร์
+// ── สลับได้ 1 บรรทัด: ถ้าอยากให้แคชแบ็คใหม่คิดจากยอดที่จ่ายจริง (หลังหักแคชแบ็คเดิม) เปลี่ยนเป็น true
+const CASHBACK_AFTER_DISCOUNT = false;
 
-  if(hasBBOtherNow){
-    // BB อื่นๆ — ซ่อน dropdown แสดง checkbox แทน
-    if(staffSel) staffSel.style.display='none';
-    if(bbOtherStaffSec) bbOtherStaffSec.style.display='';
-    renderBBOtherStaffChecks();
-  } else {
-    if(staffSel){ staffSel.style.display=''; staffSel.disabled=false; }
-    if(bbOtherStaffSec) bbOtherStaffSec.style.display='none';
+function isMemberBill(){
+  if(custMode==='existing' && selectedMemberId){
+    const m=members.find(x=>x.id===selectedMemberId);
+    return !!m && m.isMember!==false;
   }
-  const staffId=hasBBOtherNow?'':document.getElementById('co-staff').value;
-  const price=getServiceTotal();
+  if(custMode==='new') return serviceCart.some(s=>MEMBER_SERVICES.includes(s.name));
+  return false;
+}
+
+// ค่าคอม: บริการปกติ -> พนักงานหลัก (เรทตามบริการ) / BB อื่นๆ -> 14% หารกันตามคนที่ติ๊ก
+// เรทค่าคอมของแต่ละรายการ: ติดมากับรายการ (แว็กซ์ 20% / สปา 10%) ถ้าไม่มีก็ใช้ 14%
+function commRateOf(item){ return item.commRate!==undefined ? item.commRate : COMM_RATE_DEFAULT; }
+
+// กลุ่มต้นทุนผลิตภัณฑ์ของแต่ละบริการ (ใช้ในแดชบอร์ดผู้บริหาร)
+//   bb = งานฝั่ง BB ทั้งหมด · wax = แว็กซ์ · spa = สปา
+function costGroupOf(item){
+  if(item.wax) return 'wax';
+  if(item.spa) return 'spa';
+  return 'bb';
+}
+
+function calcCommission(staffId){
   const staff=staffById(staffId);
+  // รายการที่ไม่ได้ระบุผู้ทำเป็นคนอื่น -> ค่าคอมเป็นของพนักงานหลักที่เปิดบิล
+  const mainComm = staff ? serviceCart.filter(s=>!s.bbOther && (!s.doerId || s.doerId===staffId)).reduce((sum,s)=>
+    sum + Math.round(s.price*commRateOf(s)), 0) : 0;
+  const staffMap={};
+  // รายการที่ระบุผู้ทำคนอื่น (เช่น งานสปา) -> ค่าคอมไปที่คนนั้น
+  serviceCart.filter(s=>!s.bbOther && s.doerId && s.doerId!==staffId).forEach(s=>{
+    const st=staffById(s.doerId); if(!st) return;
+    if(!staffMap[st.id]) staffMap[st.id]={staffId:st.id, staffName:st.name, commRate:commRateOf(s), comm:0};
+    staffMap[st.id].comm += Math.round(s.price*commRateOf(s));
+  });
+  serviceCart.filter(s=>s.bbOther && s.coStaffs && s.coStaffs.length).forEach(s=>{
+    const n=s.coStaffs.length;
+    const per=Math.round(s.price*BB_OTHER_COMM_RATE/n);
+    s.coStaffs.forEach(cs=>{
+      if(!staffMap[cs.staffId]) staffMap[cs.staffId]={staffId:cs.staffId, staffName:cs.staffName, commRate:BB_OTHER_COMM_RATE, comm:0};
+      staffMap[cs.staffId].comm += per;
+    });
+  });
+  const coStaffs=Object.values(staffMap);
+  return {staff, mainComm, coStaffs, totalComm: mainComm + coStaffs.reduce((a,c)=>a+c.comm,0)};
+}
+
+function calcBill(){
+  const serviceTotal  = getServiceTotal();
+  const homecareTotal = getHomecareTotal();
+  const memberBill    = isMemberBill();
+  // เครดิต: ใช้ได้เฉพาะเมมเบอร์เดิม และลดได้เฉพาะค่าบริการ สูงสุด 50%
+  const available   = (custMode==='existing'&&selectedMemberId) ? getValidCredit(selectedMemberId) : 0;
+  const maxCredit   = Math.floor(Math.min(available, serviceTotal*MAX_CREDIT_PCT));
+  const creditUsed  = Math.max(0, Math.min(coUseCredit, maxCredit));
+  const serviceAfterCredit = Math.max(0, serviceTotal - creditUsed);
+  const paid        = serviceAfterCredit;                // ค่าบริการหลังหักแคชแบ็ค
+  const totalPaid   = paid + homecareTotal;              // + สินค้า (แคชแบ็คใช้กับสินค้าไม่ได้)
+  const creditLeft  = Math.max(0, Math.round(available - creditUsed));   // แคชแบ็คที่ยังสะสมอยู่
+  // แคชแบ็คใหม่: คิดจากราคาก่อนหักแคชแบ็คเดิม เช่น บริการ 2,400 ใช้ไป 400 -> ยังได้คืน 240
+  const cashbackBase = CASHBACK_AFTER_DISCOUNT ? totalPaid : (serviceTotal + homecareTotal);
+  const creditEarn  = memberBill && cashbackBase>0 ? Math.round(cashbackBase*CREDIT_RATE) : 0;
+  return {serviceTotal, homecareTotal, available, maxCredit, creditUsed, creditLeft, totalPaid, paid, creditEarn, memberBill};
+}
+
+function updateCheckout(){
+  const hasBBOther = serviceCart.some(s=>s.bbOther);
+  const bbOtherStaffSec=document.getElementById('bb-other-staff-section');
+  // แสดง dropdown พนักงานหลักเสมอ (คนเปิดบิล) — ถ้ามี BB อื่นๆ ค่อยโชว์ช่องติ๊กคนช่วยเพิ่ม
+  const staffSel=document.getElementById('co-staff');
+  if(staffSel){ staffSel.style.display=''; staffSel.disabled=false; }
+  if(bbOtherStaffSec) bbOtherStaffSec.style.display = hasBBOther ? '' : 'none';
+  if(hasBBOther) renderBBOtherStaffChecks();
+
+  const staffId = staffSel ? staffSel.value : '';
+  const b = calcBill();
+  const c = calcCommission(staffId);
+
+  // ── ค่าคอม (พรีวิวตรงกับที่จะบันทึกจริง) ──
   const commPreview=document.getElementById('co-comm-preview');
   const commRow=document.getElementById('co-comm-row');
-  const hasBBOtherComm=serviceCart.some(s=>s.bbOther);
-  if(hasBBOtherComm){
-    // BB อื่นๆ — แสดงค่าคอมทุกคนที่ติ๊ก
-    const bbPrice=serviceCart.filter(s=>s.bbOther).reduce((a,s)=>a+s.price,0);
-    if(bbOtherStaffIds.length>0&&bbPrice>0){
-      // 14% รวม หารจำนวนคน
-      const totalBBComm=Math.round(bbPrice*0.14);
-      const perPersonComm=Math.round(totalBBComm/bbOtherStaffIds.length);
-      const lines=bbOtherStaffIds.map(sid=>{
-        const st=STAFF.find(x=>x.id===sid);
-        return `${st.name} ${perPersonComm.toLocaleString()}฿`;
-      });
-      commPreview.style.display=''; commRow.style.display='';
-      document.getElementById('co-comm-label').textContent='💜 ค่าคอมรวม';
-      document.getElementById('co-comm-amt').textContent=(perPersonComm*bbOtherStaffIds.length).toLocaleString()+' ฿';
-    } else { commPreview.style.display='none'; commRow.style.display='none'; }
-  } else if(staff&&price>0){
-    const comm=serviceCart.filter(s=>!s.bbOther).reduce((sum,s)=>{
-      const rate=s.commRate!==undefined?s.commRate:staff.commRate;
-      return sum+Math.round(s.price*rate);
-    },0);
-    const commNote='';
-    if(comm>0){
-      document.getElementById('co-comm-text').textContent=`${staff.name} จะได้ค่าคอม ${comm.toLocaleString()} ฿${commNote}`;
-      commPreview.style.display=''; commRow.style.display='';
-      document.getElementById('co-comm-label').textContent=`💜 ค่าคอม ${staff.name}`;
-      document.getElementById('co-comm-amt').textContent=`${comm.toLocaleString()} ฿`;
-    } else { commPreview.style.display='none'; commRow.style.display='none'; }
+  if(c.totalComm>0){
+    const parts=[];
+    if(c.mainComm>0 && c.staff) parts.push(`${c.staff.name} ${c.mainComm.toLocaleString()}฿`);
+    c.coStaffs.forEach(cs=>parts.push(`${cs.staffName} ${cs.comm.toLocaleString()}฿ (BB อื่นๆ)`));
+    document.getElementById('co-comm-text').textContent = parts.join(' · ');
+    document.getElementById('co-comm-label').textContent = '💜 ค่าคอมรวม';
+    document.getElementById('co-comm-amt').textContent = c.totalComm.toLocaleString()+' ฿';
+    commPreview.style.display=''; commRow.style.display='';
   } else { commPreview.style.display='none'; commRow.style.display='none'; }
+
+  // ── เครดิต ──
   const creditSection=document.getElementById('co-credit-section');
-  if(custMode==='existing'&&selectedMemberId){
-    const credit=getValidCredit(selectedMemberId);
-    // ใช้เครดิตได้เฉพาะค่าบริการ ไม่รวมสินค้า
-    const maxUse=Math.min(credit,Math.floor(price*MAX_CREDIT_PCT));
-    document.getElementById('co-available-credit').textContent=Math.round(credit).toLocaleString()+' ฿';
-    document.getElementById('co-max-credit').textContent=Math.round(maxUse).toLocaleString()+' ฿ (จากค่าบริการ)';
+  if(custMode==='existing' && selectedMemberId && b.available>0){
+    document.getElementById('co-available-credit').textContent=Math.round(b.available).toLocaleString()+' ฿';
+    document.getElementById('co-max-credit').textContent=Math.round(b.maxCredit).toLocaleString()+' ฿ (จากค่าบริการ)';
     const slider=document.getElementById('co-credit-slider');
-    slider.max=maxUse; slider.value=Math.min(coUseCredit,maxUse); coUseCredit=parseInt(slider.value);
-    document.getElementById('co-use-credit-label').textContent=coUseCredit.toLocaleString()+' ฿';
-    creditSection.style.display=credit>0?'':'none';
+    slider.max=b.maxCredit; slider.value=b.creditUsed; coUseCredit=b.creditUsed;
+    document.getElementById('co-use-credit-label').textContent=b.creditUsed.toLocaleString()+' ฿';
+    const leftEl=document.getElementById('co-credit-left');
+    if(leftEl) leftEl.textContent = b.creditUsed>0
+      ? `เหลือสะสมต่อ ${b.creditLeft.toLocaleString()} ฿`
+      : `ยังไม่ใช้ครั้งนี้ — สะสมไว้ ${Math.round(b.available).toLocaleString()} ฿`;
+    creditSection.style.display='';
   } else { creditSection.style.display='none'; coUseCredit=0; }
-  const homecareTotal = getHomecareTotal();
-  const discount = getDiscount();
-  // แสดง preview ส่วนลด
-  const discPreview=document.getElementById('co-discount-preview');
-  if(discPreview){ discPreview.style.display=discount>0?'':'none'; discPreview.textContent=discount>0?`ลด ${discount.toLocaleString()}฿`:''; }
-  // ยอดชำระ = (บริการ - เครดิต) + สินค้า - ส่วนลด
-  const total=Math.max(0,price-coUseCredit-discount)+homecareTotal;
-  const willBeMember=custMode==='new'&&serviceCart.some(s=>MEMBER_SERVICES.includes(s.name));
-  const hasMember=(custMode==='existing'&&selectedMemberId)||willBeMember;
-  // อัปเดต panel title
+
+  // ── หัวข้อ panel ลูกค้าใหม่ ──
   const titleEl=document.getElementById('new-panel-title');
-  if(titleEl&&custMode==='new'){
-    titleEl.innerHTML=willBeMember
-      ?'🌟 ลูกค้าใหม่ <span class="member-badge-new">ได้เป็นเมมเบอร์!</span>'
-      :'👤 ลูกค้าใหม่ <span style="font-size:0.68rem;font-weight:400;color:#888;">(บันทึกเป็นลูกค้าทั่วไป)</span>';
+  if(titleEl && custMode==='new'){
+    titleEl.innerHTML = b.memberBill
+      ? '🌟 ลูกค้าใหม่ <span class="member-badge-new">ได้เป็นเมมเบอร์!</span>'
+      : '👤 ลูกค้าใหม่ <span style="font-size:0.68rem;font-weight:400;color:#888;">(บันทึกเป็นลูกค้าทั่วไป)</span>';
   }
-  // เครดิตที่ได้รับ = (บริการ + สินค้า) × 10% — คำนวณจากยอดรวมก่อนหักเครดิต
-  const creditEarn=hasMember&&(price+homecareTotal)>0?Math.round((price+homecareTotal)*CREDIT_RATE):0;
-  document.getElementById('co-price').textContent=price.toLocaleString()+' ฿';
+
+  // ── สรุปยอด ──
+  document.getElementById('co-price').textContent=b.serviceTotal.toLocaleString()+' ฿';
   renderServiceCart();
-  document.getElementById('co-total').textContent=total.toLocaleString()+' ฿';
-  document.getElementById('co-credit-row').style.display=coUseCredit>0?'':'none';
-  document.getElementById('co-credit-used').textContent='- '+coUseCredit.toLocaleString()+' ฿';
-  document.getElementById('co-earn-row').style.display=creditEarn>0?'':'none';
-  document.getElementById('co-earn').textContent='+'+creditEarn.toLocaleString()+' ฿ (บริการ+สินค้า)';
+  document.getElementById('co-total').textContent=b.totalPaid.toLocaleString()+' ฿';
+  document.getElementById('co-credit-row').style.display=b.creditUsed>0?'':'none';
+  document.getElementById('co-credit-used').textContent='- '+b.creditUsed.toLocaleString()+' ฿';
+  document.getElementById('co-earn-row').style.display=b.creditEarn>0?'':'none';
+  document.getElementById('co-earn').textContent='+'+b.creditEarn.toLocaleString()+' ฿ (จากบริการ+สินค้า ใช้ครั้งหน้า)';
   updateHorecareTotal();
 }
 
 function updateCreditUse(val){ coUseCredit=parseInt(val); document.getElementById('co-use-credit-label').textContent=coUseCredit.toLocaleString()+' ฿'; updateCheckout(); }
 
+// กันกดปุ่มยืนยันซ้ำจนเกิดบิลซ้ำ
+let checkoutBusy=false;
+function lockCheckoutBtn(lock){
+  const b=document.getElementById('btn-confirm-checkout');
+  if(!b) return;
+  b.disabled=lock;
+  b.style.opacity=lock?'0.55':'';
+  b.style.pointerEvents=lock?'none':'';
+  b.textContent=lock?'⏳ กำลังบันทึก...':'✅ ยืนยันชำระเงิน';
+}
+
 async function confirmCheckout(){
-  const price=getServiceTotal();
-  if(!price && !getHomecareTotal()){showToast('⚠️ กรุณาเลือกบริการหรือสินค้าค่ะ');return;}
-  const hasBBOtherBill=serviceCart.some(s=>s.bbOther);
-  const staffId=hasBBOtherBill?(bbOtherStaffIds[0]||''):document.getElementById('co-staff').value;
-  if(!staffId){showToast('⚠️ กรุณาเลือกพนักงาน');return;}
+  if(checkoutBusy){ showToast('⏳ กำลังบันทึกบิลอยู่ค่ะ รอสักครู่นะคะ'); return; }
+  const b=calcBill();
+  if(!b.serviceTotal && !b.homecareTotal){ showToast('⚠️ กรุณาเลือกบริการหรือสินค้าค่ะ'); return; }
+  const staffId=document.getElementById('co-staff').value;
+  if(!staffId){ showToast('⚠️ กรุณาเลือกพนักงาน'); return; }
+  const hasBBOther=serviceCart.some(s=>s.bbOther);
+  if(hasBBOther && !serviceCart.every(s=>!s.bbOther || (s.coStaffs&&s.coStaffs.length))){
+    showToast('⚠️ รายการ BB อื่นๆ ยังไม่ได้ระบุคนทำค่ะ'); return;
+  }
+  if(serviceCart.some(s=>s.spa && !s.doerId)){
+    showToast('⚠️ กรุณาระบุว่าใครเป็นคนทำสปาค่ะ'); return;
+  }
   if(custMode==='new'){
     const name=document.getElementById('new-name').value.trim();
     const phone=document.getElementById('new-phone').value.trim();
-    if(!name||!phone){showToast('⚠️ กรุณากรอกชื่อและเบอร์');return;}
-    if(!/^[0-9]{10}$/.test(phone)){showToast('⚠️ เบอร์โทรต้องมี 10 หลักค่ะ');return;}
-    if(members.find(m=>m.phone===phone)){showToast('⚠️ เบอร์นี้มีในระบบแล้ว');return;}
+    if(!name||!phone){ showToast('⚠️ กรุณากรอกชื่อและเบอร์'); return; }
+    if(!/^[0-9]{10}$/.test(phone)){ showToast('⚠️ เบอร์โทรต้องมี 10 หลักค่ะ'); return; }
+    if(members.find(m=>m.phone===phone)){ showToast('⚠️ เบอร์นี้มีในระบบแล้ว'); return; }
   }
-  const staff=staffById(staffId);
-  // ค่าคอมคำนวณจากมูลค่าบริการเสมอ (ไม่ใช่ paid) เพื่อให้พนักงานได้คอมแม้ลูกค้าใช้คูปอง
-  const bbOtherTotalPrice=serviceCart.filter(s=>s.bbOther).reduce((b,s)=>b+s.price,0);
-  // BB Other: ค่าคอมอยู่ใน coStaffs — ไม่นับซ้ำ
-  // ส่วนบริการปกติ: คำนวณ commission แยกตาม service (wax=20%, spa=10%, อื่นๆ=staff rate)
-  const commission=hasBBOtherBill?0:(()=>{
-    if(!staff) return 0;
-    return serviceCart.filter(s=>!s.bbOther).reduce((sum,s)=>{
-      const rate=s.commRate!==undefined?s.commRate:staff.commRate;
-      return sum+Math.round(s.price*rate);
-    },0);
-  })();
+
+  const c=calcCommission(staffId);
+  const staff=c.staff;
   const serviceNames=serviceCart.map(s=>s.name).join(', ')||'บริการ';
-  // ใช้วันที่จากช่องเลือก + เวลาจริงปัจจุบัน (รองรับลงย้อนหลัง)
-  const coDateVal = document.getElementById('co-date')?.value;
+
+  // วันที่บริการ (ลงย้อนหลังได้) + เวลาจริงปัจจุบัน
+  const coDateVal=document.getElementById('co-date')?.value;
   let now;
   if(coDateVal){
     const actual=new Date();
     const [y,m,d]=coDateVal.split('-').map(Number);
     now=new Date(y,m-1,d,actual.getHours(),actual.getMinutes(),actual.getSeconds());
-  } else {
-    now=new Date();
-  }
+  } else { now=new Date(); }
   const expiry=new Date(now); expiry.setDate(expiry.getDate()+CREDIT_EXPIRE_DAYS);
-  const discount=getDiscount();
-  const paid=Math.max(0,price-coUseCredit-discount);
-  const homecareTotal=getHomecareTotal();
-  const homecareItems=HOMECARE_ITEMS.filter(i=>(homecareCart[i.id]||0)>0).map(i=>({id:i.id,name:i.name,qty:homecareCart[i.id],unitPrice:i.price,total:i.price*homecareCart[i.id]}));
-  const totalPaid=paid+homecareTotal;
+
+  const homecareItems=HOMECARE_ITEMS.filter(i=>(homecareCart[i.id]||0)>0)
+    .map(i=>({id:i.id,name:i.name,qty:homecareCart[i.id],unitPrice:i.price,total:i.price*homecareCart[i.id]}));
+
   let memberId=null, memberName='ลูกค้าทั่วไป', isNewMember=false;
+  let refMemberId=null, refCredit=0;
+
+  checkoutBusy=true; lockCheckoutBtn(true);
   setSyncing(true);
   try {
     if(custMode==='new'){
       const name=document.getElementById('new-name').value.trim();
       const phone=document.getElementById('new-phone').value.trim();
-      if(!name){setSyncing(false);showToast('⚠️ กรุณากรอกชื่อลูกค้าค่ะ');return;}
       const referrerId=document.getElementById('new-referrer').value;
-      const willBeMember=serviceCart.some(s=>MEMBER_SERVICES.includes(s.name));
-      memberId='M'+Date.now(); memberName=name; isNewMember=willBeMember;
+      memberId='M'+Date.now(); memberName=name; isNewMember=b.memberBill;
       const custCode=await genCustomerCode();
-      const newCust={id:memberId,name,phone,joinDate:now.toISOString(),referrerId,isMember:willBeMember,customerCode:custCode};
-      await window.fbSaveMember(newCust);
-      if(willBeMember){
-        const ce=Math.round((price+homecareTotal)*CREDIT_RATE);
-        const t1={id:'T'+Date.now(),memberId,type:'earn',amount:ce,balance:ce,desc:`เครดิตแรกจาก ${serviceNames}`,date:now.toISOString(),expiry:expiry.toISOString()};
-        await window.fbSaveTx(t1);
+      await window.fbSaveMember({id:memberId,name,phone,joinDate:now.toISOString(),referrerId,isMember:b.memberBill,customerCode:custCode});
+      if(b.memberBill && b.creditEarn>0){
+        await window.fbSaveTx({id:uid('T'),memberId,type:'earn',amount:b.creditEarn,balance:b.creditEarn,
+          desc:`เครดิตแรกจาก ${serviceNames}`,date:now.toISOString(),expiry:expiry.toISOString()});
         if(referrerId){
-          const re=new Date(now); re.setDate(re.getDate()+CREDIT_EXPIRE_DAYS);
-          const t2={id:'T'+Date.now()+1,memberId:referrerId,type:'ref',amount:ce,balance:ce,desc:`เครดิตแนะนำ: ${name}`,date:now.toISOString(),expiry:re.toISOString()};
-          await window.fbSaveTx(t2);
+          refMemberId=referrerId; refCredit=b.creditEarn;
+          await window.fbSaveTx({id:uid('T'),memberId:referrerId,type:'ref',amount:refCredit,balance:refCredit,
+            desc:`เครดิตแนะนำ: ${name}`,date:now.toISOString(),expiry:expiry.toISOString()});
         }
       }
     }
-    if(custMode==='existing'&&selectedMemberId){
+
+    if(custMode==='existing' && selectedMemberId){
       memberId=selectedMemberId;
-      memberName=members.find(x=>x.id===memberId)?.name||'';
-      if(coUseCredit>0){
-        let rem=coUseCredit;
-        const actTx=transactions.filter(t=>t.memberId===memberId&&t.balance>0&&new Date(t.expiry)>now).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
-        for(let t of actTx){
-          if(rem<=0)break;
-          const u=Math.min(t.balance,rem); t.balance-=u; rem-=u;
+      const m=members.find(x=>x.id===memberId);
+      memberName=m?.name||'';
+      // หักเครดิตที่ใช้ (ตัดจากก้อนที่หมดอายุเร็วสุดก่อน)
+      if(b.creditUsed>0){
+        let rem=b.creditUsed;
+        const actTx=transactions.filter(t=>t.memberId===memberId&&t.balance>0&&new Date(t.expiry)>now)
+                                .sort((a,b2)=>new Date(a.expiry)-new Date(b2.expiry));
+        for(const t of actTx){
+          if(rem<=0) break;
+          const u=Math.min(t.balance,rem); t.balance=Math.round(t.balance-u); rem-=u;
           await window.fbUpdateTx(t);
         }
-        await window.fbSaveTx({id:'T'+Date.now(),memberId,type:'use',amount:coUseCredit,balance:0,desc:`ใช้เครดิตลดบิล ${serviceNames}`,date:now.toISOString(),expiry:expiry.toISOString()});
+        await window.fbSaveTx({id:uid('T'),memberId,type:'use',amount:b.creditUsed,balance:0,
+          desc:`ใช้เครดิตลดบิล ${serviceNames}`,date:now.toISOString(),expiry:expiry.toISOString()});
       }
-      const ce=Math.round((price+homecareTotal)*CREDIT_RATE);
-      await window.fbSaveTx({id:'T'+Date.now()+1,memberId,type:'earn',amount:ce,balance:ce,desc:`เครดิตจาก ${serviceNames}${homecareTotal>0?' + สินค้า':''}`,date:now.toISOString(),expiry:expiry.toISOString()});
-      const m=members.find(x=>x.id===memberId);
-      if(m&&m.referrerId){
-        const rc=Math.round((price+homecareTotal)*CREDIT_RATE);
-        const re=new Date(now); re.setDate(re.getDate()+CREDIT_EXPIRE_DAYS);
-        await window.fbSaveTx({id:'T'+Date.now()+2,memberId:m.referrerId,type:'ref',amount:rc,balance:rc,desc:`เครดิตจาก ${m.name} (${serviceNames})`,date:now.toISOString(),expiry:re.toISOString()});
+      // แคชแบ็ค — เฉพาะลูกค้าที่เป็นเมมเบอร์เท่านั้น
+      if(b.creditEarn>0){
+        await window.fbSaveTx({id:uid('T'),memberId,type:'earn',amount:b.creditEarn,balance:b.creditEarn,
+          desc:`เครดิตจาก ${serviceNames}${b.homecareTotal>0?' + สินค้า':''}`,date:now.toISOString(),expiry:expiry.toISOString()});
+        if(m&&m.referrerId){
+          refMemberId=m.referrerId; refCredit=b.creditEarn;
+          await window.fbSaveTx({id:uid('T'),memberId:m.referrerId,type:'ref',amount:refCredit,balance:refCredit,
+            desc:`เครดิตจาก ${m.name} (${serviceNames})`,date:now.toISOString(),expiry:expiry.toISOString()});
+        }
       }
     }
-    // รวม coStaffs จาก BB อื่นๆ — 14% รวม หารจำนวนคน
-  const bbOtherItems=serviceCart.filter(s=>s.bbOther&&s.coStaffs);
-  // ราคาบริการปกติในบิล (ไม่ใช่ BB Other) เพื่อรวม comm ให้พนักงาน
-  const regularTotalForComm=serviceCart.filter(s=>!s.bbOther).reduce((a,s)=>a+(s.price||0),0);
-  const allCoStaffs=bbOtherItems.length?(()=>{
-    const staffMap={};
-    bbOtherItems.forEach((s,si)=>{
-      const n=s.coStaffs.length||1;
-      const bbComm=Math.round(s.price*0.14/n);
-      // บริการปกติ: กระจาย comm ผ่านกลุ่มพนักงานชุดแรก (ไม่นับซ้ำ)
-      const regComm=si===0&&n>0?Math.round(regularTotalForComm*0.14/n):0;
-      s.coStaffs.forEach(cs=>{
-        if(!staffMap[cs.staffId]) staffMap[cs.staffId]={...cs,comm:0,forService:s.name,servicePrice:s.price};
-        staffMap[cs.staffId].comm+=bbComm+regComm;
-      });
+
+    await window.fbSaveSale({
+      id:uid('S'), memberId, memberName, service:serviceNames,
+      price:b.serviceTotal,            // ค่าบริการก่อนหักอะไร
+      serviceTotal:b.serviceTotal,
+      // รายการบริการแยกบรรทัด + กลุ่มต้นทุน (แดชบอร์ดผู้บริหารใช้คำนวณกำไร)
+      serviceItems: serviceCart.map(it=>({
+        name: it.name, price: it.price, group: costGroupOf(it),
+        ...(it.doerName?{doerName:it.doerName, doerId:it.doerId}:{})
+      })),
+      homecareTotal:b.homecareTotal, homecareItems,
+      discount:0, creditUsed:b.creditUsed, creditEarned:b.creditEarn,
+      creditExpiry: expiry.toISOString(),
+      refMemberId, refCredit,
+      paid:b.paid, totalPaid:b.totalPaid,
+      staffId, staffName:staff?.name||'',
+      commission:c.mainComm,
+      ...(c.coStaffs.length?{coStaffs:c.coStaffs}:{}),
+      payMethod, date:now.toISOString()
     });
-    return Object.values(staffMap);
-  })():[];
-  // BB Other: ไม่ใส่ staffId/staffName เพื่อป้องกัน double-count ใน payroll
-  const saveStaffId=hasBBOtherBill?'':staffId;
-  const saveStaffName=hasBBOtherBill?'':staff?.name||'';
-  await window.fbSaveSale({id:'S'+Date.now(),memberId,memberName,service:serviceNames,price,discount,paid,totalPaid,...(allCoStaffs.length?{coStaffs:allCoStaffs}:{}),creditUsed:coUseCredit,creditEarned:memberId?Math.round((price+homecareTotal)*CREDIT_RATE):0,staffId:saveStaffId,staffName:saveStaffName,commission:commission,payMethod,homecareItems,homecareTotal,date:now.toISOString()});
-    let msg=`✅ ชำระ ${paid.toLocaleString()} ฿`;
-    if(custMode==='new'&&memberName!='ลูกค้าทั่วไป'){
-      if(isNewMember){ msg+=` · 💜 เมมเบอร์ใหม่ ${memberName}!`; }
-      else { msg+=` · 👤 บันทึก ${memberName} แล้วค่ะ`; }
+
+    let msg=`✅ ชำระ ${b.totalPaid.toLocaleString()} ฿`;
+    if(custMode==='new'&&memberName!=='ลูกค้าทั่วไป'){
+      msg += isNewMember ? ` · 💜 เมมเบอร์ใหม่ ${memberName}!` : ` · 👤 บันทึก ${memberName} แล้วค่ะ`;
     }
-    if(commission>0) msg+=` · คอม ${staff?.name||''} ${commission.toLocaleString()}฿`;
+    if(c.totalComm>0) msg+=` · คอมรวม ${c.totalComm.toLocaleString()}฿`;
     showToast(msg);
     await addWaxVoucherIfPromo(memberId);
-    serviceCart.forEach(s=>deductStock(s.name));
-    coUseCredit=0; serviceCart=[]; selectedMemberId=null; setCheckoutDirty(false); document.querySelectorAll('.service-chip').forEach(c=>c.classList.remove('selected'));
+    coUseCredit=0; serviceCart=[]; selectedMemberId=null; setCheckoutDirty(false);
+    document.querySelectorAll('.service-chip').forEach(ch=>ch.classList.remove('selected'));
     initCheckout();
-  } catch(e){ showToast('❌ เกิดข้อผิดพลาด: '+e.message); }
-  setSyncing(false);
+  } catch(e){ showToast('❌ เกิดข้อผิดพลาด: '+e.message); console.error(e); }
+  finally { checkoutBusy=false; lockCheckoutBtn(false); setSyncing(false); }
 }
 
 function showReceiptPreview(){
-  const price=getServiceTotal()||0;
+  const b=calcBill();
   const staffId=document.getElementById('co-staff').value;
-  const staff=staffById(staffId);
-  const discountPrev=getDiscount();
-  const hcPrev=getHomecareTotal();
-  const paid=Math.max(0,price-coUseCredit-discountPrev)+hcPrev;
+  const c=calcCommission(staffId);
   const now=new Date();
-  let memberNameR='ลูกค้าทั่วไป', creditEarnR=0;
-  if(custMode==='existing'&&selectedMemberId){ memberNameR=members.find(x=>x.id===selectedMemberId)?.name||''; creditEarnR=Math.round(price*CREDIT_RATE); }
-  else if(custMode==='new'&&serviceCart.some(s=>MEMBER_SERVICES.includes(s.name))){ memberNameR=document.getElementById('new-name')?.value||'ลูกค้าใหม่'; creditEarnR=Math.round(price*CREDIT_RATE); }
-  const commission=staff&&staff.commRate>0?Math.round(price*staff.commRate):0;
+  const hcItems=HOMECARE_ITEMS.filter(i=>(homecareCart[i.id]||0)>0);
+  let memberNameR='ลูกค้าทั่วไป';
+  if(custMode==='existing'&&selectedMemberId) memberNameR=members.find(x=>x.id===selectedMemberId)?.name||'';
+  else if(custMode==='new') memberNameR=document.getElementById('new-name')?.value||'ลูกค้าใหม่';
   document.getElementById('modal-body').innerHTML=`
     <div class="receipt">
       <div class="receipt-header"><div class="receipt-shop">BB GLOW</div><div style="font-size:0.74rem;color:var(--text-muted)">ครบวงจร หัวหิน</div><div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${now.toLocaleDateString('th-TH',{dateStyle:'full'})}</div></div>
-      ${serviceCart.map(s=>`<div class="receipt-row"><span>${s.name}</span><span>${(s.custom?price:s.price).toLocaleString()} ฿</span></div>`).join('')}
-      <div class="receipt-row"><span>ราคา</span><span>${price.toLocaleString()} ฿</span></div>
-      ${staff?`<div class="receipt-row"><span>พนักงาน</span><span>${staff.name}</span></div>`:''}
-      ${coUseCredit>0?`<div class="receipt-row" style="color:var(--danger)"><span>หักเครดิต</span><span>-${coUseCredit.toLocaleString()} ฿</span></div>`:''}
-      <div class="receipt-row receipt-total"><span>💵 ยอดชำระ</span><span>${paid.toLocaleString()} ฿</span></div>
-      ${creditEarnR>0?`<div class="receipt-credit">✨ ${memberNameR} ได้รับเครดิต +${creditEarnR.toLocaleString()} ฿ (อายุ 1 ปี)</div>`:''}
-      ${commission>0?`<div class="receipt-comm">💜 ค่าคอม ${staff.name}: ${commission.toLocaleString()} ฿</div>`:''}
+      ${serviceCart.map(s=>`<div class="receipt-row"><span>${s.name}</span><span>${s.price.toLocaleString()} ฿</span></div>`).join('')}
+      ${b.serviceTotal>0?`<div class="receipt-row"><span>รวมค่าบริการ</span><span>${b.serviceTotal.toLocaleString()} ฿</span></div>`:''}
+      ${hcItems.map(i=>`<div class="receipt-row"><span>🛍️ ${i.name} ×${homecareCart[i.id]}</span><span>${(i.price*homecareCart[i.id]).toLocaleString()} ฿</span></div>`).join('')}
+      ${b.homecareTotal>0?`<div class="receipt-row"><span>รวมสินค้า</span><span>${b.homecareTotal.toLocaleString()} ฿</span></div>`:''}
+      ${c.staff?`<div class="receipt-row"><span>พนักงาน</span><span>${c.staff.name}</span></div>`:''}
+      ${b.creditUsed>0?`<div class="receipt-row" style="color:var(--danger)"><span>หักแคชแบ็คสะสม</span><span>-${b.creditUsed.toLocaleString()} ฿</span></div>`:''}
+      <div class="receipt-row receipt-total"><span>💵 ยอดชำระ</span><span>${b.totalPaid.toLocaleString()} ฿</span></div>
+      ${b.creditEarn>0?`<div class="receipt-credit">✨ ${memberNameR} ได้แคชแบ็ค +${b.creditEarn.toLocaleString()} ฿ ใช้ครั้งหน้าได้ (อายุ 1 ปี)</div>`:''}
+      ${b.creditUsed>0||b.creditEarn>0?`<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-top:4px;">แคชแบ็คคงเหลือหลังบิลนี้ ${(b.creditLeft+b.creditEarn).toLocaleString()} ฿</div>`:''}
+      ${c.totalComm>0?`<div class="receipt-comm">💜 ค่าคอมรวม: ${c.totalComm.toLocaleString()} ฿</div>`:''}
     </div>
     <div style="margin-top:11px;display:grid;gap:7px">
       <button class="btn btn-gold" onclick="window.print()">🖨️ พิมพ์ใบเสร็จ</button>
@@ -1884,7 +1949,7 @@ function openMemberDetail(id){
   const isMem=m.isMember!==false;
   document.getElementById('modal-body').innerHTML=`
     <div class="member-card">
-      <div class="mc-badge" style="${isMem?'':'background:#888'}">${isMem?'MEMBER':'GUEST'}</div>
+      <div class="mc-badge" style="${isMem?'':'background:#888'}">${isMem?'MEMBER · ตลอดชีพ':'GUEST'}</div>
       ${m.customerCode?`<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-bottom:2px;">รหัสลูกค้า #${m.customerCode}</div>`:''}
       <div class="mc-name">${m.name}</div>
       <div class="mc-phone">📞 ${m.phone||'ไม่มีเบอร์'} · สมัคร ${fmtDate(m.joinDate)}</div><div class="mc-credit-label">เครดิตคงเหลือ</div><div class="mc-credit">${Math.round(credit).toLocaleString()} <span>บาท</span></div>${expInfo}</div>
@@ -1893,6 +1958,19 @@ function openMemberDetail(id){
       <div class="rs-card"><div class="rs-num" style="color:var(--success)">${referred.length}</div><div class="rs-label">แนะนำเพื่อน</div></div>
       <div class="rs-card"><div class="rs-num" style="color:var(--rose)">${salesLog.filter(s=>s.memberId===id&&!s.voided).length}</div><div class="rs-label">ครั้งที่มา</div></div>
     </div>
+    ${(()=>{
+      if(!activeTx.length) return '';
+      const rows=activeTx.slice().sort((a,b)=>new Date(a.expiry)-new Date(b.expiry)).map(t=>{
+        const dl=daysLeft(t.expiry);
+        const warn=dl<=30;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:5px 2px;border-bottom:1px dashed rgba(201,169,110,0.25);">
+          <span style="color:var(--text-muted)">ได้เมื่อ ${fmtDate(t.date)}</span>
+          <span style="color:${warn?'var(--danger)':'var(--text-muted)'}">หมดอายุ ${fmtDate(t.expiry)} (${dl} วัน)</span>
+          <span style="font-weight:700;color:var(--gold-dark);min-width:64px;text-align:right;">${Math.round(t.balance).toLocaleString()} ฿</span>
+        </div>`;
+      }).join('');
+      return `<div class="section-title">💰 เครดิตคงเหลือแยกก้อน <span style="font-size:0.68rem;font-weight:400;color:var(--text-muted)">(แต่ละก้อนอายุ 1 ปีนับจากวันที่ได้)</span></div>${rows}`;
+    })()}
     ${referrer?`<div class="alert alert-info">👥 แนะนำโดย: <strong>${referrer.name}</strong></div>`:''}
     ${referred.length?`<div class="alert alert-success">🌟 แนะนำเพื่อน: ${referred.map(r=>r.name).join(', ')}</div>`:''}
     ${(()=>{
@@ -2049,7 +2127,7 @@ function setReportPeriod(p,el){
   renderReport();
 }
 
-function getDateRange(period){
+function getDateRange(period, src){
   const now=new Date(); const start=new Date();
   // ใช้ end = สิ้นวัน (23:59:59) เสมอ เพื่อรองรับบิลที่บันทึกเวลาเที่ยงวัน
   const end=new Date(now); end.setHours(23,59,59,999);
@@ -2058,7 +2136,9 @@ function getDateRange(period){
   else if(period==='month'){start.setDate(1);start.setHours(0,0,0,0);}
   else if(period==='lastmonth'){start.setMonth(start.getMonth()-1);start.setDate(1);start.setHours(0,0,0,0);const endLM=new Date(now.getFullYear(),now.getMonth(),0,23,59,59,999);return{start,end:endLM};}
   else if(period==='pick'){
-    const val=document.getElementById('payroll-month-input')?.value||document.getElementById('report-month-input')?.value;
+    const val = src==='payroll'
+      ? document.getElementById('payroll-month-input')?.value
+      : document.getElementById('report-month-input')?.value;
     if(val){
       const [y,m]=val.split('-').map(Number);
       const s=new Date(y,m-1,1,0,0,0); const e=new Date(y,m,0,23,59,59);
@@ -2070,7 +2150,7 @@ function getDateRange(period){
 }
 
 function renderReport(){
-  const {start,end}=getDateRange(reportPeriod);
+  const {start,end}=getDateRange(reportPeriod,'report');
   const all=salesLog.filter(s=>new Date(s.date)>=start&&new Date(s.date)<=end);
   const filtered=all.filter(s=>!s.voided); // ไม่คำนวณบิล Void
   const revenue=filtered.reduce((s,x)=>s+(x.totalPaid||x.paid),0);
@@ -2100,7 +2180,10 @@ function renderStaffAndHomecareBreakdown(filtered){
   const el=document.getElementById('report-staff-breakdown'); if(!el) return;
 
   // ── ยอดรายพนักงาน ──
-  const staffRows=STAFF.filter(s=>s.id!=='S1').map(s=>{
+  // ผู้ทำงานปัจจุบัน + คนที่เลิกทำแล้วแต่ยังมีบิลในช่วงนี้ (เพื่อให้ยอดรวมด้านบนตรงกับผลรวมการ์ด)
+  const activeIds=new Set(filtered.flatMap(x=>[x.staffId,...(x.coStaffs||[]).map(c=>c.staffId)]).filter(Boolean));
+  const rowStaff=[...STAFF,...RETIRED_STAFF.filter(s=>activeIds.has(s.id))];
+  const staffRows=rowStaff.map(s=>{
     const bills=filtered.filter(x=>x.staffId===s.id);
     const total=bills.reduce((sum,x)=>sum+(x.totalPaid||x.paid||0),0);
     const comm=bills.reduce((sum,x)=>sum+(x.commission||0),0);
@@ -2206,7 +2289,7 @@ function showDayDetail(dk){
   const active=ds.filter(s=>!s.voided);
   const rev=active.reduce((s,x)=>s+(x.totalPaid||x.paid),0);
   const cr=active.reduce((s,x)=>s+(x.creditUsed||0),0);
-  const cm=active.reduce((s,x)=>s+(x.commission||0),0);
+  const cm=active.reduce((s,x)=>s+(x.commission||0)+(x.coStaffs?x.coStaffs.reduce((a,cs)=>a+(cs.comm||0),0):0),0);
   const cashT=active.filter(x=>!x.payMethod||x.payMethod==='cash').reduce((s,x)=>s+(x.totalPaid||x.paid),0);
   const transT=active.filter(x=>x.payMethod==='transfer').reduce((s,x)=>s+(x.totalPaid||x.paid),0);
   document.getElementById('modal-body').innerHTML=`
@@ -2240,11 +2323,11 @@ function showDayDetail(dk){
 }
 
 function exportCSV(){
-  const {start,end}=getDateRange(reportPeriod);
+  const {start,end}=getDateRange(reportPeriod,'report');
   const filtered=salesLog.filter(s=>{const d=new Date(s.date);return d>=start&&d<=end&&!s.voided;});
   if(!filtered.length){showToast('⚠️ ไม่มีข้อมูลในช่วงนี้ค่ะ');return;}
 
-  const headers=['วันที่','ชื่อลูกค้า','รหัสลูกค้า','บริการ','ราคา (฿)','เครดิตใช้ (฿)','ยอดชำระ (฿)','เครดิตได้รับ (฿)','วิธีชำระ','พนักงาน','ค่าคอม (฿)'];
+  const headers=['วันที่','ชื่อลูกค้า','รหัสลูกค้า','บริการ','ค่าบริการ (฿)','สินค้าโฮมแคร์ (฿)','ส่วนลด (฿)','เครดิตใช้ (฿)','ยอดชำระ (฿)','เครดิตได้รับ (฿)','วิธีชำระ','พนักงาน','ค่าคอม (฿)'];
   const rows=filtered.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(s=>{
     const m=members.find(x=>x.id===s.memberId);
     return [
@@ -2252,13 +2335,15 @@ function exportCSV(){
       s.memberName||'ลูกค้าทั่วไป',
       m?.customerCode||'-',
       s.service||'-',
-      s.price||0,
+      s.serviceTotal!=null?s.serviceTotal:(s.price||0),
+      s.homecareTotal||0,
+      s.discount||0,
       s.creditUsed||0,
       s.totalPaid||s.paid||0,
       s.creditEarned||0,
       s.payMethod==='transfer'?'โอนเงิน':'เงินสด',
       s.staffName||'-',
-      s.commission||0
+      (s.commission||0)+(s.coStaffs?s.coStaffs.reduce((a,cs)=>a+(cs.comm||0),0):0)
     ];
   });
 
@@ -2266,8 +2351,8 @@ function exportCSV(){
 
   // กำหนดความกว้างคอลัมน์
   ws['!cols']=[
-    {wch:14},{wch:20},{wch:12},{wch:28},{wch:12},
-    {wch:14},{wch:14},{wch:16},{wch:12},{wch:18},{wch:12}
+    {wch:14},{wch:20},{wch:12},{wch:28},{wch:13},
+    {wch:15},{wch:11},{wch:13},{wch:13},{wch:15},{wch:11},{wch:16},{wch:12}
   ];
 
   // style header row (bold)
@@ -2286,7 +2371,8 @@ function exportCSV(){
     const k=new Date(s.date).toLocaleDateString('th-TH',{month:'long',year:'numeric'});
     if(!byMonth[k]) byMonth[k]={month:k,count:0,revenue:0,credit:0,comm:0};
     byMonth[k].count++; byMonth[k].revenue+=(s.totalPaid||s.paid)||0;
-    byMonth[k].credit+=s.creditEarned||0; byMonth[k].comm+=s.commission||0;
+    byMonth[k].credit+=s.creditEarned||0;
+    byMonth[k].comm+=(s.commission||0)+(s.coStaffs?s.coStaffs.reduce((a,cs)=>a+(cs.comm||0),0):0);
   });
   const sumHeaders=['เดือน','จำนวนบิล','รายรับ (฿)','เครดิตแจก (฿)','ค่าคอมรวม (฿)'];
   const sumRows=Object.values(byMonth).map(r=>[r.month,r.count,r.revenue,r.credit,r.comm]);
@@ -2348,7 +2434,7 @@ function renderPayroll(){
   if(isRestricted){
     const s = STAFF.find(st=>st.id===currentUser.staffId);
     if(!s){ document.getElementById('payroll-list').innerHTML=''; return; }
-    const {start,end}=getDateRange(payrollPeriod);
+    const {start,end}=getDateRange(payrollPeriod,'payroll');
     const filtered=salesLog.filter(x=>new Date(x.date)>=start&&new Date(x.date)<=end&&!x.voided);
     const myComm=filtered.filter(x=>x.staffId===s.id).reduce((sum,x)=>sum+(x.commission||0),0);
     const myBBOtherComm=filtered.filter(x=>x.coStaffs&&x.coStaffs.some(cs=>cs.staffId===s.id)).reduce((sum,x)=>{const cs=x.coStaffs.find(c=>c.staffId===s.id);return sum+(cs?.comm||0);},0);
@@ -2360,7 +2446,7 @@ function renderPayroll(){
     const dailyRate=Math.round(s.salary/daysInMonth);
     const accruedSalary=Math.round(dailyRate*dayOfMonth);
     const pct=Math.round((dayOfMonth/daysInMonth)*100);
-    const accruedTotal=accruedSalary+s.bonus+myComm;
+    const accruedTotal=accruedSalary+s.bonus+myComm+myBBOtherComm;
     const ini=s.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     document.getElementById('payroll-period-label').textContent='📅 เดือน'+now.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
     document.getElementById('payroll-list').innerHTML=`<div class="payroll-card">
@@ -2391,7 +2477,7 @@ function renderPayroll(){
     return;
   }
   // owner / receptionist เห็นทั้งหมด
-  const {start,end}=getDateRange(payrollPeriod);
+  const {start,end}=getDateRange(payrollPeriod,'payroll');
   const isCurrentMonth=payrollPeriod==='month';
   const now=new Date();
   const pickVal=document.getElementById('payroll-month-input')?.value;
@@ -2399,7 +2485,7 @@ function renderPayroll(){
   const monthLabel=isCurrentMonth?`เดือน${now.toLocaleDateString('th-TH',{month:'long',year:'numeric'})}`:payrollPeriod==='lastmonth'?`เดือน${new Date(now.getFullYear(),now.getMonth()-1,1).toLocaleDateString('th-TH',{month:'long',year:'numeric'})}`:payrollPeriod==='pick'&&pickDate?`เดือน${pickDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'})}`:'ทุกช่วงเวลา';
   document.getElementById('payroll-period-label').textContent='📅 '+monthLabel;
   const filtered=salesLog.filter(s=>new Date(s.date)>=start&&new Date(s.date)<=end&&!s.voided);
-  document.getElementById('payroll-list').innerHTML=STAFF.filter(s=>s.id!=='S1').map(s=>{
+  document.getElementById('payroll-list').innerHTML=STAFF.map(s=>{
     const myComm=filtered.filter(x=>x.staffId===s.id).reduce((sum,x)=>sum+(x.commission||0),0);
     const myBBOtherComm=filtered.filter(x=>x.coStaffs&&x.coStaffs.some(cs=>cs.staffId===s.id)).reduce((sum,x)=>{const cs=x.coStaffs.find(c=>c.staffId===s.id);return sum+(cs?.comm||0);},0);
     const myJobs=filtered.filter(x=>x.staffId===s.id).length;
@@ -2413,7 +2499,7 @@ function renderPayroll(){
       const dailyRate=Math.round(s.salary/daysInMonth);
       const accruedSalary=Math.round(dailyRate*dayOfMonth);
       const pct=Math.round((dayOfMonth/daysInMonth)*100);
-      const accruedTotal=accruedSalary+s.bonus+myComm;
+      const accruedTotal=accruedSalary+s.bonus+myComm+myBBOtherComm;
       accrualBlock=`<div class="accrual-box"><div style="font-size:0.7rem;opacity:0.8;margin-bottom:4px">📅 รายได้สะสมถึงวันที่ ${dayOfMonth} / ${daysInMonth} วัน</div><div style="display:flex;align-items:baseline;gap:6px"><div class="accrual-today">${accruedTotal.toLocaleString()} ฿</div><div style="font-size:0.72rem;opacity:0.75">จาก ${totalFull.toLocaleString()} ฿</div></div><div style="margin-top:8px"><div class="salary-progress-label"><span>เงินเดือน ${accruedSalary.toLocaleString()} ฿</span><span>${pct}%</span></div><div class="salary-progress-bar"><div class="salary-progress-fill" style="width:${pct}%"></div></div><div style="font-size:0.65rem;opacity:0.7;color:white">≈ ${dailyRate.toLocaleString()} ฿/วัน</div></div>${myComm>0?`<div style="font-size:0.72rem;margin-top:6px;opacity:0.85">💜 ค่าคอมเดือนนี้: +${myComm.toLocaleString()} ฿ (${myJobs} งาน)</div>`:''}</div>`;
     }
     return `<div class="payroll-card"><div class="payroll-top"><div class="payroll-header"><div class="payroll-avatar">${ini}</div><div><div class="payroll-name">${s.name} ${s.commRate>0?`<span style="background:rgba(255,255,255,0.25);font-size:0.6rem;padding:1px 6px;border-radius:10px">คอม ${Math.round(s.commRate*100)}%</span>`:''}</div><div class="payroll-role">${s.role}</div></div></div>${accrualBlock}</div><div><div class="payroll-row"><span>💰 เงินเดือน</span><span>${s.salary.toLocaleString()} ฿</span></div>${s.bonus>0?`<div class="payroll-row"><span>🎁 เบี้ยพิเศษ</span><span>+${s.bonus.toLocaleString()} ฿</span></div>`:''} ${s.commRate>0?`<div class="payroll-row" style="color:var(--purple)"><span>💜 ค่าคอม (${myJobs} งาน · ${myRev.toLocaleString()} ฿)</span><span>+${myComm.toLocaleString()} ฿</span></div>`:`<div class="payroll-row" style="color:var(--text-muted)"><span>ค่าคอม</span><span>— ไม่มี</span></div>`}${myBBOtherComm>0?`<div class="payroll-row" style="color:var(--gold-dark)"><span>💼 ค่าคอม BB Other</span><span>+${myBBOtherComm.toLocaleString()} ฿</span></div>`:''}<div class="payroll-total"><span>💵 รวมรับทั้งเดือน</span><span>${totalFull.toLocaleString()} ฿</span></div></div></div>`;
@@ -2421,7 +2507,7 @@ function renderPayroll(){
 }
 
 function exportPayrollCSV(){
-  const {start,end}=getDateRange(payrollPeriod);
+  const {start,end}=getDateRange(payrollPeriod,'payroll');
   const filtered=salesLog.filter(s=>new Date(s.date)>=start&&new Date(s.date)<=end&&!s.voided);
   let csv='ชื่อพนักงาน,ตำแหน่ง,เงินเดือน,เบี้ยพิเศษ,ค่าคอม,จำนวนงาน,รวมรับ\n';
   STAFF.forEach(s=>{const mc=filtered.filter(x=>x.staffId===s.id).reduce((sum,x)=>sum+(x.commission||0),0);const mbc=filtered.filter(x=>x.coStaffs&&x.coStaffs.some(cs=>cs.staffId===s.id)).reduce((sum,x)=>{const cs=x.coStaffs.find(c=>c.staffId===s.id);return sum+(cs?.comm||0);},0);const mj=filtered.filter(x=>x.staffId===s.id).length;csv+=`${s.name},${s.role},${s.salary},${s.bonus},${mc+mbc},${mj},${s.salary+s.bonus+mc+mbc}\n`;});
@@ -2452,20 +2538,20 @@ function initCheckout(){
   if(document.getElementById('co-search-results')) document.getElementById('co-search-results').innerHTML='';
   document.getElementById('member-eligible-warning').style.display='none';
   document.querySelectorAll('.service-chip').forEach(c=>c.classList.remove('selected'));
-  const promoPanelEl=document.getElementById('promo-panel'); if(promoPanelEl) promoPanelEl.style.display='none';
   // ตั้งวันที่เป็นวันนี้
   const coDateEl = document.getElementById('co-date');
   if(coDateEl) coDateEl.value = new Date().toISOString().slice(0,10);
   // reset วิธีชำระและ homecare
   payMethod='cash';
   homecareCart={};
-  const discEl=document.getElementById('co-discount'); if(discEl) discEl.value='';
   const fadeEl=document.getElementById('fade-price-section'); if(fadeEl) fadeEl.style.display='none';
   const fadePriceEl=document.getElementById('fade-price-input'); if(fadePriceEl) fadePriceEl.value='';
   const svcFade=document.getElementById('svc-fade'); if(svcFade) svcFade.classList.remove('selected');
   const waxPanel=document.getElementById('wax-custom-price-section'); if(waxPanel) waxPanel.style.display='none';
   const waxInput=document.getElementById('wax-custom-price-input'); if(waxInput) waxInput.value='';
   waxCustomActive=null;
+  spaDoerId=null;
+  const spaSec=document.getElementById('spa-doer-section'); if(spaSec) spaSec.style.display='none';
   const svcBBOther=document.getElementById('svc-bb-other'); if(svcBBOther) svcBBOther.classList.remove('selected');
   const bbOtherSec=document.getElementById('bb-other-section'); if(bbOtherSec) bbOtherSec.style.display='none';
   const bbOtherName=document.getElementById('bb-other-name'); if(bbOtherName) bbOtherName.value='';
@@ -2496,75 +2582,6 @@ function autoBackup(){
   }catch(e){ console.log('backup storage full'); }
 }
 
-// ===== STOCK SYSTEM =====
-const STOCK_ITEMS = [
-  // วัตถุดิบหลัก (ตัดอัตโนมัติ)
-  {id:'ampule_stv', name:'แอมพูลสเตวี่',       brand:'Stayvie',          unit:'ml',   cat:'ingredient', icon:'💉'},
-  {id:'hyalu_stv',  name:'ไฮยาลูรอนสเตวี่',    brand:'Stayvie',          unit:'ml',   cat:'ingredient', icon:'💧'},
-  {id:'bbglow_stv', name:'BB Glow สเตวี่',      brand:'Stayvie',          unit:'ml',   cat:'ingredient', icon:'✨'},
-  {id:'ampule_lan', name:'แอมพูล LAN FROST',    brand:'LAN FROST 8ml/vial',unit:'ml',  cat:'ingredient', icon:'💉'},
-  {id:'bb_meso',    name:'BB MESOWHITE',         brand:'ibcoconde 5ml/vial',unit:'ml',  cat:'ingredient', icon:'🤍'},
-  {id:'meso_clear', name:'เมโสหน้าใส Placenta', brand:'—',                unit:'ขวด', cat:'ingredient', icon:'🧬'},
-  {id:'meso_young', name:'เมโสหน้าเด็ก Collagen',brand:'—',              unit:'ขวด', cat:'ingredient', icon:'🧬'},
-  {id:'base_xy',    name:'เบส XY',               brand:'XY',               unit:'ml',   cat:'ingredient', icon:'🟡'},
-  {id:'needle_r',   name:'เข็มนาโนกลม',          brand:'—',                unit:'ชิ้น', cat:'ingredient', icon:'📌'},
-  {id:'needle_f',   name:'เข็มนาโนเหลี่ยม',      brand:'—',                unit:'ชิ้น', cat:'ingredient', icon:'📌'},
-  {id:'needle_meso',name:'เข็มเมโส',              brand:'—',                unit:'ชิ้น', cat:'ingredient', icon:'💉'},
-  {id:'brush_org',  name:'XY บรัชสีส้ม',          brand:'XY',               unit:'ชิ้น', cat:'ingredient', icon:'🟠'},
-  {id:'brush_pink', name:'XY บรัชสีชมพู',         brand:'XY',               unit:'ชิ้น', cat:'ingredient', icon:'🩷'},
-  // Home Care (ขาย)
-  {id:'foam_pinn',  name:'โฟมล้างหน้า PINN',       brand:'PINN', unit:'ขวด', cat:'homecare', icon:'🧴', price:370},
-  {id:'moist_pinn', name:'มอยด์เจอร์ไรเซอร์ PINN', brand:'PINN', unit:'ขวด', cat:'homecare', icon:'🧴', price:350},
-  {id:'adv_pinn',   name:'แอดวานซ์เซรั่ม PINN',    brand:'PINN', unit:'ขวด', cat:'homecare', icon:'🧴', price:390},
-  {id:'mask_uv',    name:'แมสยูวี',                 brand:'—',    unit:'อัน', cat:'homecare', icon:'😷', price:159},
-  {id:'spray_spf',  name:'สเปรย์กันแดด',            brand:'—',    unit:'ขวด', cat:'homecare', icon:'🌞', price:550},
-  {id:'mask_face',  name:'มาร์กหน้า',               brand:'—',    unit:'อัน', cat:'homecare', icon:'🎭', price:9},
-];
-
-// สูตรตัดสต็อคต่อโปรแกรม
-const STOCK_FORMULA = {
-  'BB GLOW ชุดทดลอง':   {ampule_stv:0.8, bbglow_stv:1.5, needle_r:1, needle_f:1},
-  'BB Double Serum':     {ampule_stv:1.6, bbglow_stv:3.0, needle_r:1, needle_f:1},
-  'Meso สูตรอาจารย์':   {ampule_stv:0.3, hyalu_stv:1.0, meso_clear:1, meso_young:1, needle_r:1},
-  'ผลักวิตามิน 2 ตัว':  {ampule_stv:1.0, hyalu_stv:1.0, needle_r:1},
-  'ผลักวิตามิน 3 ตัว':  {ampule_stv:2.0, hyalu_stv:1.0, needle_r:1},
-  'ผลักวิตามิน 5 ตัว':  {ampule_stv:4.0, hyalu_stv:1.0, needle_r:1},
-  'BB หน้าคอ':           {bb_meso:1.0, needle_r:1, needle_f:1},
-  'BB แก้ม':             {needle_r:1, needle_f:1},
-  'BB ปาก':              {needle_r:1, needle_f:1},
-  'BB รักแร้':           {ampule_lan:2.0, bb_meso:2.0, needle_r:1, needle_f:1},
-  'BB แขน 2 ข้าง':      {ampule_lan:26.0, bb_meso:26.0, needle_r:1, needle_f:1},
-  'BB ขา 2 ข้าง':       {ampule_lan:40.0, bb_meso:40.0, needle_r:1, needle_f:1},
-  'BB ทั้งตัว':          {ampule_lan:60.0, bb_meso:60.0, needle_r:1, needle_f:1},
-};
-
-let stockData = {}; // {itemId: qty} — synced from Firebase
-
-async function saveStock(){
-  try{
-    setSyncing(true);
-    await window.fbSaveStock({...stockData});
-  }catch(e){ console.log('saveStock error',e); }
-  setSyncing(false);
-}
-
-
-async function deductStock(serviceName){
-  const formula = STOCK_FORMULA[serviceName];
-  if(!formula) return;
-  let changed = false;
-  Object.entries(formula).forEach(([itemId, qty])=>{
-    // เฉพาะถ้า item นั้นมีอยู่ใน stockData แล้วเท่านั้น (ไม่สร้างใหม่)
-    if(stockData[itemId] != null){
-      stockData[itemId] = Math.max(0, (stockData[itemId]||0) - qty);
-      changed = true;
-    }
-  });
-  if(changed) await saveStock();
-  const low = STOCK_ITEMS.filter(i=>formula[i.id] && (stockData[i.id]||0) < 3);
-  if(low.length) showToast(`⚠️ สต็อคใกล้หมด: ${low.map(i=>i.name).join(', ')}`);
-}
-
 // ===== VOID SALE =====
 async function voidSale(saleId){
   if(!confirm('ยกเลิกบิลนี้ใช่มั้ยคะ?\n\n🔄 ทุกอย่างจะถูกคืนกลับเหมือนไม่เคยเกิดขึ้น\n📋 บิลยังเก็บไว้เป็นเอกสารอ้างอิงค่ะ')) return;
@@ -2577,13 +2594,16 @@ async function voidSale(saleId){
     const now = new Date();
     const expiry = new Date(now); expiry.setDate(expiry.getDate()+CREDIT_EXPIRE_DAYS);
 
-    // 1. คืนเครดิตที่ใช้ไป (creditUsed) — คืนกลับให้ลูกค้า
+    // 1. คืนเครดิตที่ใช้ไป (creditUsed) — คืนกลับให้ลูกค้า โดยคงวันหมดอายุ "ของเดิม" ไม่ยืดอายุให้ใหม่
     if(sale.memberId && sale.creditUsed > 0){
+      const backExp = sale.creditExpiry
+        ? new Date(sale.creditExpiry)
+        : (()=>{ const d=new Date(sale.date); d.setDate(d.getDate()+CREDIT_EXPIRE_DAYS); return d; })();
       await window.fbSaveTx({
-        id:'TV'+Date.now()+'a', memberId:sale.memberId, type:'earn',
+        id:uid('TV'), memberId:sale.memberId, type:'earn',
         amount:sale.creditUsed, balance:sale.creditUsed,
         desc:`คืนเครดิต (Void บิล ${sale.service})`,
-        date:now.toISOString(), expiry:expiry.toISOString()
+        date:now.toISOString(), expiry:backExp.toISOString()
       });
     }
 
@@ -2600,56 +2620,42 @@ async function voidSale(saleId){
         await window.fbUpdateTx(t);
       }
       await window.fbSaveTx({
-        id:'TV'+Date.now()+'b', memberId:sale.memberId, type:'void',
+        id:uid('TV'), memberId:sale.memberId, type:'void',
         amount:-sale.creditEarned, balance:0,
         desc:`หักเครดิต (Void บิล ${sale.service})`,
         date:now.toISOString(), expiry:expiry.toISOString()
       });
     }
 
-    // 3. หักเครดิตที่คนแนะนำได้รับจากบิลนี้
-    if(sale.memberId){
-      const member = members.find(m=>m.id===sale.memberId);
-      if(member && member.referrerId){
-        const refCredit = Math.round((sale.price+(sale.homecareTotal||0))*CREDIT_RATE);
-        if(refCredit > 0){
-          let rem2 = refCredit;
-          const refTx = transactions
-            .filter(t=>t.memberId===member.referrerId && t.balance>0 && new Date(t.expiry)>now)
-            .sort((a,b)=>new Date(b.expiry)-new Date(a.expiry));
-          for(let t of refTx){
-            if(rem2<=0) break;
-            const cut = Math.min(t.balance, rem2);
-            t.balance -= cut; rem2 -= cut;
-            await window.fbUpdateTx(t);
-          }
-          await window.fbSaveTx({
-            id:'TV'+Date.now()+'c', memberId:member.referrerId, type:'void',
-            amount:-refCredit, balance:0,
-            desc:`หักเครดิตแนะนำ (Void บิล ${sale.service} ของ ${member.name})`,
-            date:now.toISOString(), expiry:expiry.toISOString()
-          });
-        }
+    // 3. หักเครดิตที่คนแนะนำได้รับจากบิลนี้ — เฉพาะบิลที่บันทึกไว้ว่าเคยให้จริง
+    //    (บิลเก่าที่ไม่มีข้อมูลนี้จะไม่หัก เพื่อไม่ให้เครดิตคนแนะนำหายโดยไม่มีที่มา)
+    if(sale.refMemberId && sale.refCredit > 0){
+      let rem2 = sale.refCredit;
+      const refTx = transactions
+        .filter(t=>t.memberId===sale.refMemberId && t.balance>0 && new Date(t.expiry)>now)
+        .sort((a,b)=>new Date(b.expiry)-new Date(a.expiry));   // ตัดจากก้อนที่หมดอายุช้าสุดก่อน
+      for(const t of refTx){
+        if(rem2<=0) break;
+        const cut = Math.min(t.balance, rem2);
+        t.balance = Math.round(t.balance - cut); rem2 -= cut;
+        await window.fbUpdateTx(t);
       }
-    }
-
-    // 4. คืนสต็อควัตถุดิบ
-    const formula = STOCK_FORMULA[sale.service];
-    if(formula){
-      Object.entries(formula).forEach(([itemId, qty])=>{
-        if(stockData[itemId]!=null) stockData[itemId] = (stockData[itemId]||0) + qty;
+      await window.fbSaveTx({
+        id:uid('TV'), memberId:sale.refMemberId, type:'void',
+        amount:-sale.refCredit, balance:0,
+        desc:`หักเครดิตแนะนำ (Void บิล ${sale.service} ของ ${sale.memberName||''})`,
+        date:now.toISOString(), expiry:now.toISOString()
       });
-      await saveStock();
     }
 
-    // 5. Mark void ในบิล
+    // 4. Mark void ในบิล
     await window.fbVoidSale(saleId, voidBy);
 
     // อัพเดต salesLog local ทันที ไม่รอ onSnapshot
     const _vi = salesLog.findIndex(s=>s.id===saleId);
     if(_vi>=0) salesLog[_vi] = {...salesLog[_vi], voided:true, voidBy, voidAt:new Date().toISOString()};
 
-    showToast('✅ Void บิลแล้วค่ะ — คืนเครดิตและสต็อคกลับหมดแล้ว');
+    showToast('✅ Void บิลแล้วค่ะ — คืนเครดิตกลับให้เรียบร้อยแล้ว');
     closeModalDirect();
     renderReport();
     renderHome();
@@ -2661,11 +2667,64 @@ async function voidSale(saleId){
 }
 
 // ===== LOGIN SYSTEM =====
+// SHA-256 แบบไม่พึ่งไลบรารีภายนอก (ทำงานได้แม้เปิดไฟล์ตรง ๆ)
+function sha256(str){
+  function rr(n,x){return (x>>>n)|(x<<(32-n));}
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const utf8=unescape(encodeURIComponent(str));
+  const len=utf8.length;
+  const words=[];
+  for(let i=0;i<len;i++) words[i>>2]=(words[i>>2]||0)|((utf8.charCodeAt(i)&0xff)<<((3-(i%4))*8));
+  words[len>>2]=(words[len>>2]||0)|(0x80<<((3-(len%4))*8));
+  const total=((len+8)>>6<<4)+16;
+  while(words.length<total) words.push(0);
+  words[total-2]=Math.floor(len*8/0x100000000);
+  words[total-1]=(len*8)>>>0;
+  const w=new Array(64);
+  for(let i=0;i<words.length;i+=16){
+    for(let t=0;t<16;t++) w[t]=words[i+t]|0;
+    for(let t=16;t<64;t++){
+      const s0=rr(7,w[t-15])^rr(18,w[t-15])^(w[t-15]>>>3);
+      const s1=rr(17,w[t-2])^rr(19,w[t-2])^(w[t-2]>>>10);
+      w[t]=(w[t-16]+s0+w[t-7]+s1)|0;
+    }
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){
+      const S1=rr(6,e)^rr(11,e)^rr(25,e);
+      const ch=(e&f)^((~e)&g);
+      const t1=(h+S1+ch+K[t]+w[t])|0;
+      const S0=rr(2,a)^rr(13,a)^rr(22,a);
+      const maj=(a&b)^(a&c)^(b&c);
+      const t2=(S0+maj)|0;
+      h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;
+    }
+    H=[(H[0]+a)|0,(H[1]+b)|0,(H[2]+c)|0,(H[3]+d)|0,(H[4]+e)|0,(H[5]+f)|0,(H[6]+g)|0,(H[7]+h)|0];
+  }
+  return H.map(x=>('00000000'+(x>>>0).toString(16)).slice(-8)).join('');
+}
+// ทำให้เดารหัสยากขึ้น: ผสมเกลือแล้ววนซ้ำหลายรอบ
+const PW_SALT='bbglow-huahin-2026';
+const PW_ROUNDS=20000;
+function hashPassword(pw){
+  let h=sha256(PW_SALT+':'+pw);
+  for(let i=0;i<PW_ROUNDS;i++) h=sha256(h+PW_SALT);
+  return h;
+}
+
+// ⚠️ ไม่เก็บรหัสผ่านเป็นตัวอักษรในไฟล์อีกต่อไป — เก็บเป็นค่าที่ย้อนกลับไม่ได้ (hash)
+// เปลี่ยนรหัสเอง: เปิดไฟล์ set-password.html พิมพ์รหัสใหม่ แล้วเอาค่าที่ได้มาวางแทน pwHash ของคนนั้น
 const USERS = {
-  'golf':   { password:'a11111', name:'อาจารย์กอล์ฟ', role:'เจ้าของ',   staffId:'S1', perm:'owner' },
-  'ae':     { password:'a1113',  name:'คุณเอ',         role:'พนักงาน',  staffId:'S2', perm:'receptionist' },
-  'ying':   { password:'a1112',  name:'หญิง',          role:'พนักงาน',  staffId:'S3', perm:'receptionist' },
-  'master': { password:'admin',  name:'Master',         role:'Admin',    staffId:'',   perm:'owner' },
+  'golf': { pwHash:'dbd9d376fa1669d45c28211373beb19cd01b421e5574b71757819dee32f67e7a', name:'อาจารย์กอล์ฟ', role:'เจ้าของ',  staffId:'S1', perm:'owner' },
+  'ae':   { pwHash:'cff3cbfcbed102e1fca7a303c0664acd9e21686fe87d3960444e3287fca1b5ee', name:'คุณเอ',        role:'พนักงาน', staffId:'S2', perm:'receptionist' },
+  'ying': { pwHash:'93d258c76ce009e95ae9ec5329298863ea1c9fc759157cb8f25346996723c7df', name:'หญิง',         role:'พนักงาน', staffId:'S3', perm:'receptionist' },
 };
 
 // สิทธิ์การเข้าถึง tab ตาม role
@@ -2673,11 +2732,9 @@ const TAB_PERMS = {
   'home':     ['owner','receptionist','staff'],
   'checkout': ['owner','receptionist'],
   'members':  ['owner','receptionist'],
-  'booking':  ['owner','receptionist','staff'],
   'report':   ['owner','receptionist'],
   'payroll':  ['owner','receptionist','staff'], // staff เห็นเฉพาะตัวเอง
   'ranking':  ['owner','receptionist'],
-  'stock':    ['owner','receptionist'],
 };
 
 function canAccess(tabName){
@@ -2686,6 +2743,12 @@ function canAccess(tabName){
 }
 function isOwner(){ return currentUser?.perm==='owner'; }
 function isStaff(){ return currentUser?.perm==='staff'; }
+
+// ── สวิตช์ความปลอดภัยขั้นถัดไป ──
+// ตั้งเป็น true หลังสร้างบัญชีผู้ใช้ใน Firebase Console แล้ว (ดูไฟล์ คู่มือความปลอดภัย.md)
+// เมื่อเปิดแล้ว การเข้าระบบจะไปตรวจกับ Firebase จริง และตั้งกฎ Firestore ให้อ่าน-เขียนได้เฉพาะคนที่ล็อกอิน
+const USE_FIREBASE_AUTH = false;
+const AUTH_EMAIL = { golf:'golf@bbglow.local', ae:'ae@bbglow.local', ying:'ying@bbglow.local' };
 
 const SESSION_KEY = 'bbglow_session';
 const SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30 วัน auto logout
@@ -2706,15 +2769,20 @@ function doLogin(){
   if(!selectedLoginUser){ err.textContent='⚠️ กรุณาเลือกชื่อก่อนค่ะ'; return; }
   if(!pass){ err.textContent='⚠️ กรุณากรอก password ค่ะ'; return; }
   const user = USERS[selectedLoginUser];
-  // check master password too
-  const masterOk = pass === USERS['master'].password;
-  if(user && (user.password === pass || masterOk)){
-    currentUser = masterOk && selectedLoginUser !== 'master' ? {...user, usedMaster:true} : user;
-    currentUser.username = selectedLoginUser;
-    // save session with loginAt timestamp
-    const session = { username: selectedLoginUser, expires: Date.now() + 30*24*60*60*1000, loginAt: Date.now() };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    showApp();
+  err.textContent='⏳ กำลังตรวจสอบ...';
+  if(USE_FIREBASE_AUTH){
+    // ตรวจรหัสกับ Firebase จริง — ข้อมูลในฐานจะเปิดให้เฉพาะคนที่ผ่านด่านนี้
+    window.fbSignIn(AUTH_EMAIL[selectedLoginUser]||'', pass)
+      .then(()=>{ err.textContent=''; finishLogin(user); })
+      .catch(()=>{ err.textContent='❌ Password ไม่ถูกต้องค่ะ ลองใหม่อีกครั้ง';
+                   document.getElementById('login-password').value='';
+                   document.getElementById('login-password').focus(); });
+    return;
+  }
+  const ok = !!user && hashPassword(pass) === user.pwHash;
+  if(ok){
+    err.textContent='';
+    finishLogin(user);
   } else {
     err.textContent='❌ Password ไม่ถูกต้องค่ะ ลองใหม่อีกครั้ง';
     document.getElementById('login-password').value='';
@@ -2722,9 +2790,40 @@ function doLogin(){
   }
 }
 
-function doLogout(){
-  if(!confirm('ออกจากระบบใช่มั้ยคะ?')) return;
+// ===== ตรวจอายุ session ทุก 5 นาที =====
+// หมายเหตุ: setTimeout ของเบราว์เซอร์รับค่าได้สูงสุดราว 24.8 วัน ถ้าใส่ 30 วันมันจะเด้งทันที
+// จึงเปลี่ยนมาเช็คเป็นระยะแทน
+let sessionWatchTimer=null;
+function startSessionWatch(){
+  if(sessionWatchTimer) clearInterval(sessionWatchTimer);
+  sessionWatchTimer=setInterval(()=>{
+    const raw=localStorage.getItem(SESSION_KEY);
+    if(!raw){ return; }
+    try{
+      const ss=JSON.parse(raw);
+      const age=Date.now()-(ss.loginAt||0);
+      if(age>=SESSION_MAX_MS || !(ss.expires>Date.now())){
+        clearInterval(sessionWatchTimer); sessionWatchTimer=null;
+        showToast('⏰ Session หมดอายุแล้วค่ะ กรุณา Login ใหม่');
+        setTimeout(()=>doLogout(true), 2000);
+      }
+    }catch(e){}
+  }, 5*60*1000);
+}
+
+function finishLogin(user){
+  currentUser = {...user, username: selectedLoginUser};
+  const session = { username: selectedLoginUser, expires: Date.now() + 30*24*60*60*1000, loginAt: Date.now() };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  startSessionWatch();
+  showApp();
+}
+
+function doLogout(force){
+  if(!force && !confirm('ออกจากระบบใช่มั้ยคะ?')) return;
+  if(sessionWatchTimer){ clearInterval(sessionWatchTimer); sessionWatchTimer=null; }
   localStorage.removeItem(SESSION_KEY);
+  if(USE_FIREBASE_AUTH && window.fbSignOut) window.fbSignOut();
   currentUser = null; selectedLoginUser = null;
   document.getElementById('app-content').style.display='none';
   document.getElementById('login-screen').classList.remove('hidden');
@@ -2737,7 +2836,7 @@ function showApp(){
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-content').style.display='';
   const u = USERS[currentUser.username] || currentUser;
-  document.getElementById('current-user-label').textContent = u.name+' · '+u.role;
+  document.getElementById('current-user-label').textContent = u.name+' · '+u.role+'  (v'+APP_VERSION+')';
   // แสดง/ซ่อน tab ตามสิทธิ์
   applyTabPermissions();
   renderHome();
@@ -2761,18 +2860,19 @@ function checkSession(){
     if(session.expires > Date.now() && age < SESSION_MAX_MS && USERS[session.username]){
       currentUser = {...USERS[session.username], username: session.username};
       selectedLoginUser = session.username;
-      // ตั้ง auto-logout timer สำหรับเวลาที่เหลือ
-      const remaining = SESSION_MAX_MS - age;
-      setTimeout(()=>{
-        showToast('⏰ Session หมดอายุแล้วค่ะ กรุณา Login ใหม่');
-        setTimeout(doLogout, 2000);
-      }, remaining);
+      startSessionWatch();   // เช็คอายุ session เป็นระยะ (แทน setTimeout ยาวที่เบราว์เซอร์รับไม่ได้)
       return true;
     }
   }catch(e){}
   localStorage.removeItem(SESSION_KEY);
   return false;
 }
+
+// เขียนเลขรุ่นลงหน้าล็อกอิน
+document.addEventListener('DOMContentLoaded', ()=>{
+  const v=document.getElementById('login-version');
+  if(v) v.textContent='เวอร์ชัน '+APP_VERSION;
+});
 
 // Override fbReady handler to check login first
 window.addEventListener('fbReady', ()=>{
@@ -2781,7 +2881,7 @@ window.addEventListener('fbReady', ()=>{
   const loaded=new Set();
   const checkDone=(key)=>{
     loaded.add(key);
-    if(loaded.size>=4&&!dataReady){
+    if(loaded.size>=3&&!dataReady){
       document.getElementById('loading-screen').classList.add('hidden');
       dataReady=true;
       if(checkSession()){
@@ -2794,7 +2894,6 @@ window.addEventListener('fbReady', ()=>{
   window.listenMembers(()=>{ if(dataReady){renderHome();renderMemberList();populateStaffSelects();autoBackup();} checkDone('members'); });
   window.listenTransactions(()=>{ if(dataReady){renderHome();renderMemberList();} checkDone('transactions'); });
   window.listenSales(()=>{ if(dataReady){renderHome();autoBackup();if(document.getElementById('page-report')?.classList.contains('active'))renderReport();if(document.getElementById('page-payroll')?.classList.contains('active'))renderPayroll();} checkDone('sales'); });
-  window.listenStock(()=>{ checkDone('stock'); });
 });
 </script>
 </body>
